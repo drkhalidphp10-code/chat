@@ -751,12 +751,13 @@ async function checkIsAdmin(username, roomName) {
 // ============================================
 const PORT = process.env.PORT || 3000;
 
-initDB().then(() => {
-  server.listen(PORT, () => {
-    console.log('\n🚀 ============================================');
-    console.log(`🌐 نظام الدردشة يعمل على: http://localhost:${PORT}`);
-    console.log(`👑 لوحة الإدارة: http://localhost:${PORT}/admin`);
-    console.log(`🔑 كلمة مرور الإدارة: ${process.env.ADMIN_PASSWORD || 'admin123'}`);
-    console.log('🚀 ============================================\n');
-  });
+server.listen(PORT, () => {
+  console.log('\n🚀 ============================================');
+  console.log(`🌐 نظام الدردشة يعمل على: http://localhost:${PORT}`);
+  console.log(`👑 لوحة الإدارة: http://localhost:${PORT}/admin`);
+  console.log(`🔑 كلمة مرور الإدارة: ${process.env.ADMIN_PASSWORD || 'admin123'}`);
+  console.log('🚀 ============================================\n');
+  
+  // Initialize database in background so it doesn't block server startup
+  initDB();
 });
