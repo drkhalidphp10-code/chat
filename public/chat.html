@@ -334,7 +334,7 @@
 <!-- ===== HEADER ===== -->
 <header class="hdr">
   <button class="hb green" id="btnUsers" onclick="toggleUsers()" title="المستخدمون">👥</button>
-  <button class="hb gray"  id="btnSpeaker" onclick="toggleMute()">🔊</button>
+  <button class="hb gray"  id="btnSpeaker" onclick="toggleIncomingMute()">🔊</button>
 
   <div class="hdr-center">
     <span class="hdr-room" id="hdrRoom">الغرفة</span>
@@ -438,6 +438,23 @@ socket.on('reconnect',()=>socket.emit('join_room',{username,room,color:myColor})
 socket.on('joined_room', d=>{
   renderUsers(d.users||[]);
   sysMsg(`مرحباً ${d.username} في غرفة ${d.room} 👋`);
+  if (d.speaker) {
+    activeSpeaker = d.speaker;
+    document.getElementById('vstrip').classList.add('on');
+    document.getElementById('vmute').style.display = 'none';
+    startClientTimer(d.speaker.timeLeft);
+    if (d.speaker.username !== username) {
+      connectToSpeaker(d.speaker.username);
+    }
+  }
+  if (d.queue) {
+    micQueueList = d.queue.map(q => q.username);
+    isQueued = micQueueList.includes(username);
+    if (isQueued) {
+      document.getElementById('micBtn').classList.add('on');
+    }
+  }
+  renderUsers(chatUsers);
 });
 socket.on('user_joined', d=>{
   renderUsers(d.users||[]);
@@ -447,7 +464,10 @@ socket.on('user_left', d=>{
   renderUsers(d.users||[]);
   if(d.kickedBy) sysMsg(`تم طرد ${d.username} 🚫`);
   else sysMsg(`${d.username} غادر الغرفة`);
-  if(voiceMap.has(d.username)) dropVoiceUser(d.username);
+  if(pcs[d.username]) {
+    pcs[d.username].close();
+    delete pcs[d.username];
+  }
 });
 socket.on('new_message', d=>{
   if(d.type==='system'||d.username==='النظام') sysMsg(d.message);
@@ -479,29 +499,34 @@ function renderUsers(users){
     return;
   }
   users.forEach(u=>{
-    const inV=voiceMap.has(u.username);
-    const vd=voiceMap.get(u.username)||{};
     const clr=u.color||nc(u.username);
     const isMe=u.username===username;
 
-    let icon='';
-    if(inV){
-      if(vd.speaking) icon='🎤';
-      else if(vd.muted) icon='🔇';
-      else icon='🎤';
+    const isSpk = activeSpeaker && activeSpeaker.username === u.username;
+    const qIdx = micQueueList.findIndex(qUser => qUser === u.username);
+
+    let icon = '';
+    let isSpeaking = false;
+
+    if (isSpk) {
+      icon = '🎤';
+      if (voiceMap.has(u.username) && voiceMap.get(u.username).speaking) {
+        isSpeaking = true;
+      }
+    } else if (qIdx !== -1) {
+      icon = `✋ ${qIdx + 1}`;
     } else {
-      // Show hand or muted for non-voice users
-      const icons=['✋','🤚','🔇','✋'];
-      let h=0; for(let c of u.username) h=c.charCodeAt(0)+((h<<5)-h);
-      icon=icons[Math.abs(h)%icons.length];
+      const icons = ['✋','🤚','✋'];
+      let h = 0; for(let c of u.username) h = c.charCodeAt(0) + ((h<<5)-h);
+      icon = icons[Math.abs(h)%icons.length];
     }
 
     const row=document.createElement('div');
-    row.className='user-row'+(vd.speaking?' speaking':'');
+    row.className='user-row'+(isSpeaking?' speaking':'');
     row.innerHTML=`
       <div class="ua" style="background:${clr}">${u.username[0]}</div>
       <span class="un" style="color:${clr}">${esc(u.username)}${isMe?' (أنت)':''}</span>
-      <span class="ui">${icon}</span>
+      <span class="ui" style="font-size:13px; font-weight:bold; color:#e09610">${icon}</span>
     `;
     if(!isMe&&isAdmin){
       row.addEventListener('contextmenu',e=>showCtx(e,u.username));
@@ -603,132 +628,305 @@ function closeEmoji(){ekb.classList.remove('open')}
 document.addEventListener('click',e=>{if(!e.target.closest('#ekb')&&e.target.id!=='emojiBtn')closeEmoji()});
 
 /* ===================================================
-   VOICE ROOM (WebRTC)
+   VOICE ROOM (WebRTC & Queue System)
 =================================================== */
 const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
-let inVoice=false,isMuted=false,voiceSeconds=0,voiceInt=null;
-let localStream=null,pcs={},speakDets={};
-let voiceMap=new Map(); // username -> {color,muted,speaking}
+let isSpeaker = false, isQueued = false;
+let activeSpeaker = null, micQueueList = [];
+let activeSpeakerSeconds = 0, speakerTimerInt = null;
+let isMuted = false, isSpeakerMuted = false;
+let localStream = null, pcs = {}, speakDets = {};
+let voiceMap = new Map(); // username -> {speaking}
 
-async function toggleVoice(){ inVoice?leaveVoice():await joinVoice() }
+function toggleVoice() {
+  handleMicButtonClick();
+}
 
-async function joinVoice(){
-  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false})}
-  catch(e){toast('⚠️ يرجى السماح بالوصول للميكروفون',true);return}
+function handleMicButtonClick() {
+  if (isSpeaker) {
+    socket.emit('leave_mic');
+    stopSpeakerMic();
+  } else if (isQueued) {
+    socket.emit('leave_mic');
+    isQueued = false;
+    document.getElementById('micBtn').classList.remove('on');
+    toast('✋ تم إنزال اليد والتراجع عن طلب المايك');
+  } else {
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      .then(stream => {
+        stream.getTracks().forEach(t => t.stop()); // request permission only
+        socket.emit('request_mic');
+        isQueued = true;
+        document.getElementById('micBtn').classList.add('on');
+        toast('✋ تم رفع اليد والانضمام لطابور المايك');
+      })
+      .catch(e => {
+        toast('⚠️ يرجى السماح بالوصول للميكروفون للمشاركة في الصوت', true);
+      });
+  }
+}
 
-  inVoice=true;isMuted=false;
+async function startSpeakerMic(){
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+  } catch(e) {
+    toast('⚠️ يرجى السماح بالوصول للميكروفون لبدء الكلام', true);
+    socket.emit('leave_mic');
+    return;
+  }
+  
+  isSpeaker = true;
+  isQueued = false;
+  isMuted = false;
+  
   document.getElementById('micBtn').classList.add('on');
   document.getElementById('vstrip').classList.add('on');
-  document.getElementById('btnSpeaker').textContent='🔊';
-
-  voiceSeconds=0;
-  voiceInt=setInterval(()=>{
-    voiceSeconds++;
-    const m=String(Math.floor(voiceSeconds/60)).padStart(2,'0');
-    const s=String(voiceSeconds%60).padStart(2,'0');
-    document.getElementById('hdrTimer').textContent=`${m}:${s}`;
-    document.getElementById('vstimer').textContent=`${m}:${s}`;
-  },1000);
-
-  voiceMap.set(username,{color:myColor,muted:false,speaking:false});
-  startSD(username,localStream,true);
-  socket.emit('join_voice',{room,color:myColor});
-  toast('🎤 انضممت للغرفة الصوتية');
+  document.getElementById('vmute').style.display = 'inline-block';
+  document.getElementById('vmute').textContent = '🎤 كتم';
+  
+  toast('🎤 المايك معك الآن! لديك 3 دقائق.');
+  
+  activeSpeaker = { username: username, color: myColor, timeLeft: 180 };
+  startClientTimer(180);
+  
+  startSD(username, localStream, true);
+  
+  // Connect to all listeners
+  chatUsers.forEach(u => {
+    if (u.username !== username) {
+      getPC(u.username);
+    }
+  });
+  
   renderUsers(chatUsers);
 }
 
-function leaveVoice(){
-  if(!inVoice)return;
-  Object.values(pcs).forEach(p=>p.close());pcs={};
-  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null}
-  document.getElementById('audioBox').innerHTML='';
-  Object.values(speakDets).forEach(id=>clearInterval(id));speakDets={};
-  clearInterval(voiceInt);
-  document.getElementById('hdrTimer').textContent='00:00';
-  document.getElementById('vstimer').textContent='';
-  inVoice=false;isMuted=false;
-  voiceMap.clear();
+function stopSpeakerMic(){
+  if(!isSpeaker) return;
+  isSpeaker = false;
+  isQueued = false;
+  
+  Object.values(pcs).forEach(p => p.close());
+  pcs = {};
+  
+  if(localStream){
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+  }
+  
+  document.getElementById('audioBox').innerHTML = '';
+  Object.values(speakDets).forEach(id => clearInterval(id));
+  speakDets = {};
+  
   document.getElementById('micBtn').classList.remove('on');
   document.getElementById('vstrip').classList.remove('on');
-  document.getElementById('btnSpeaker').textContent='🔊';
-  socket.emit('leave_voice',{room});
-  sysMsg('🔇 غادرت الغرفة الصوتية');
+  
+  clearInterval(speakerTimerInt);
+  document.getElementById('hdrTimer').textContent = '00:00';
+  document.getElementById('vstimer').textContent = '';
+  
+  toast('🔇 غادرت المايك');
+  renderUsers(chatUsers);
+}
+
+function stopListening(){
+  Object.values(pcs).forEach(p => p.close());
+  pcs = {};
+  document.getElementById('audioBox').innerHTML = '';
+  Object.values(speakDets).forEach(id => clearInterval(id));
+  speakDets = {};
+  
+  clearInterval(speakerTimerInt);
+  document.getElementById('hdrTimer').textContent = '00:00';
+  document.getElementById('vstimer').textContent = '';
+  
+  document.getElementById('vstrip').classList.remove('on');
+  
+  activeSpeaker = null;
   renderUsers(chatUsers);
 }
 
 function toggleMute(){
-  if(!localStream)return;
-  isMuted=!isMuted;
-  localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
-  document.getElementById('vmute').textContent=isMuted?'🔇 رفع الكتم':'🎤 كتم';
-  document.getElementById('btnSpeaker').textContent=isMuted?'🔇':'🔊';
-  if(voiceMap.has(username))voiceMap.get(username).muted=isMuted;
-  socket.emit('voice_mute',{room,muted:isMuted});
-  renderUsers(chatUsers);
-  toast(isMuted?'🔇 تم الكتم':'🎤 تم رفع الكتم');
+  if(!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  document.getElementById('vmute').textContent = isMuted ? '🔇 رفع الكتم' : '🎤 كتم';
+  socket.emit('voice_mute', { room, muted: isMuted });
+  toast(isMuted ? '🔇 تم كتم المايك الخاص بك' : '🎤 تم تفعيل المايك الخاص بك');
 }
 
-/* Signaling */
-socket.on('voice_user_joined',async({username:u,color})=>{
-  if(u===username)return;
-  voiceMap.set(u,{color,muted:false,speaking:false});
-  renderUsers(chatUsers);
-  sysMsg(`🎤 ${u} انضم للغرفة الصوتية`);
-  if(inVoice&&!pcs[u])await mkOffer(u);
-});
-socket.on('voice_user_left',({username:u})=>{dropVoiceUser(u);sysMsg(`🔇 ${u} غادر الصوت`)});
-socket.on('voice_room_users',async({users})=>{
-  for(const u of users){
-    if(u.username!==username){
-      voiceMap.set(u.username,{color:u.color||nc(u.username),muted:u.muted||false,speaking:false});
-      if(!pcs[u.username])await mkOffer(u.username);
+function toggleIncomingMute(){
+  isSpeakerMuted = !isSpeakerMuted;
+  const audios = document.getElementById('audioBox').querySelectorAll('audio');
+  audios.forEach(a => a.muted = isSpeakerMuted);
+  document.getElementById('btnSpeaker').textContent = isSpeakerMuted ? '🔇' : '🔊';
+  toast(isSpeakerMuted ? '🔇 تم كتم الصوت الوارد' : '🔊 تم تشغيل الصوت الوارد');
+}
+
+function startClientTimer(seconds) {
+  clearInterval(speakerTimerInt);
+  activeSpeakerSeconds = seconds;
+  
+  const updateTimerDisplay = () => {
+    const m = String(Math.floor(activeSpeakerSeconds / 60)).padStart(2, '0');
+    const s = String(activeSpeakerSeconds % 60).padStart(2, '0');
+    document.getElementById('hdrTimer').textContent = `${m}:${s}`;
+    document.getElementById('vstimer').textContent = `${m}:${s}`;
+  };
+  
+  updateTimerDisplay();
+  
+  speakerTimerInt = setInterval(() => {
+    activeSpeakerSeconds--;
+    if (activeSpeakerSeconds <= 0) {
+      clearInterval(speakerTimerInt);
+      document.getElementById('hdrTimer').textContent = '00:00';
+      document.getElementById('vstimer').textContent = '';
+    } else {
+      updateTimerDisplay();
+    }
+  }, 1000);
+}
+
+async function connectToSpeaker(speakerName) {
+  try {
+    const pc = getPC(speakerName);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('voice_offer', { to: speakerName, offer });
+  } catch(e) {
+    console.error("Error connecting to speaker:", e);
+  }
+}
+
+/* Signaling Events */
+socket.on('speaker_changed', d => {
+  if (d) {
+    activeSpeaker = d;
+    document.getElementById('vstrip').classList.add('on');
+    document.getElementById('vmute').style.display = 'none';
+    startClientTimer(d.timeLeft);
+    if (d.username !== username) {
+      connectToSpeaker(d.username);
+    }
+  } else {
+    if (!isSpeaker) {
+      stopListening();
     }
   }
   renderUsers(chatUsers);
 });
-socket.on('voice_offer',async({from,offer})=>{
-  if(!inVoice)return;
-  const pc=getPC(from);
+
+socket.on('queue_updated', d => {
+  micQueueList = (d.queue || []).map(q => q.username);
+  
+  const myPos = micQueueList.indexOf(username);
+  if (myPos !== -1) {
+    isQueued = true;
+    document.getElementById('micBtn').classList.add('on');
+  } else {
+    isQueued = false;
+    if (!isSpeaker) {
+      document.getElementById('micBtn').classList.remove('on');
+    }
+  }
+  
+  renderUsers(chatUsers);
+});
+
+socket.on('mic_assigned', () => {
+  startSpeakerMic();
+});
+
+socket.on('mic_demoted', () => {
+  stopSpeakerMic();
+  toast('⏰ انتهى وقت المايك الخاص بك (3 دقائق)');
+});
+
+socket.on('voice_offer', async ({ from, offer }) => {
+  if (!isSpeaker) return;
+  const pc = getPC(from);
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const ans=await pc.createAnswer();
+  const ans = await pc.createAnswer();
   await pc.setLocalDescription(ans);
-  socket.emit('voice_answer',{to:from,answer:ans});
+  socket.emit('voice_answer', { to: from, answer: ans });
 });
-socket.on('voice_answer',async({from,answer})=>{
-  if(pcs[from])await pcs[from].setRemoteDescription(new RTCSessionDescription(answer));
+
+socket.on('voice_answer', async ({ from, answer }) => {
+  if (pcs[from]) {
+    await pcs[from].setRemoteDescription(new RTCSessionDescription(answer));
+  }
 });
-socket.on('voice_ice',async({from,candidate})=>{
-  if(pcs[from]){try{await pcs[from].addIceCandidate(new RTCIceCandidate(candidate))}catch(e){}}
+
+socket.on('voice_ice', async ({ from, candidate }) => {
+  if (pcs[from]) {
+    try {
+      await pcs[from].addIceCandidate(new RTCIceCandidate(candidate));
+    } catch(e) {}
+  }
 });
-socket.on('voice_mute_update',({username:u,muted})=>{
-  if(voiceMap.has(u)){voiceMap.get(u).muted=muted;renderUsers(chatUsers)}
+
+socket.on('voice_mute_update', ({ username: u, muted }) => {
+  if (voiceMap.has(u)) {
+    voiceMap.get(u).muted = muted;
+  }
 });
-socket.on('voice_speaking',({username:u,speaking})=>setSpeaking(u,speaking));
+
+socket.on('voice_speaking', ({ username: u, speaking }) => setSpeaking(u, speaking));
 
 function getPC(user){
-  if(pcs[user])return pcs[user];
-  const pc=new RTCPeerConnection(STUN);
-  pcs[user]=pc;
-  if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  pc.onicecandidate=e=>{if(e.candidate)socket.emit('voice_ice',{to:user,candidate:e.candidate})};
-  pc.ontrack=e=>{addAudio(user,e.streams[0]);startSD(user,e.streams[0],false)};
-  pc.onconnectionstatechange=()=>{if(['failed','disconnected'].includes(pc.connectionState)){pc.close();delete pcs[user]}};
+  if(pcs[user]) return pcs[user];
+  const pc = new RTCPeerConnection(STUN);
+  pcs[user] = pc;
+  
+  if(isSpeaker && localStream) {
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  }
+  
+  pc.onicecandidate = e => {
+    if(e.candidate) socket.emit('voice_ice', { to: user, candidate: e.candidate });
+  };
+  
+  pc.ontrack = e => {
+    addAudio(user, e.streams[0]);
+    startSD(user, e.streams[0], false);
+  };
+  
+  pc.onconnectionstatechange = () => {
+    if(['failed','disconnected'].includes(pc.connectionState)) {
+      pc.close();
+      delete pcs[user];
+    }
+  };
+  
   return pc;
 }
-async function mkOffer(user){
-  const pc=getPC(user);
-  const offer=await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  socket.emit('voice_offer',{to:user,offer});
+
+function addAudio(user, stream){
+  let a = document.getElementById('a-' + user);
+  if(!a){
+    a = document.createElement('audio');
+    a.id = 'a-' + user;
+    a.autoplay = true;
+    a.playsInline = true;
+    document.getElementById('audioBox').appendChild(a);
+  }
+  a.srcObject = stream;
+  a.muted = isSpeakerMuted; // match current speaker volume setting
+  
+  a.play().catch(e => {
+    console.log("Autoplay blocked, waiting for interaction:", e);
+    const playOnInteraction = () => {
+      a.play().then(() => {
+        document.removeEventListener('click', playOnInteraction);
+      }).catch(() => {});
+    };
+    document.addEventListener('click', playOnInteraction);
+  });
 }
-function addAudio(user,stream){
-  let a=document.getElementById('a-'+user);
-  if(!a){a=document.createElement('audio');a.id='a-'+user;a.autoplay=true;a.playsInline=true;document.getElementById('audioBox').appendChild(a)}
-  a.srcObject=stream;
-}
+
 function dropVoiceUser(user){
-  voiceMap.delete(user);
   if(pcs[user]){pcs[user].close();delete pcs[user]}
   const a=document.getElementById('a-'+user);if(a)a.remove();
   if(speakDets[user]){clearInterval(speakDets[user]);delete speakDets[user]}
