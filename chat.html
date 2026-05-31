@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>غرفة الدردشة</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;overflow:hidden}
+
+    body{
+      font-family:'Tajawal',sans-serif;
+      background:#e0e0e0;
+      display:flex;
+      flex-direction:column;
+      height:100vh;
+    }
+
+    /* =========== HEADER =========== */
+    .hdr{
+      height:52px;
+      background:linear-gradient(180deg,#a8a8a8 0%,#888 100%);
+      border-bottom:2px solid #666;
+      display:flex;
+      align-items:center;
+      padding:0 6px;
+      gap:5px;
+      flex-shrink:0;
+      box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .hb{                      /* header button */
+      width:38px;height:38px;
+      border:none;cursor:pointer;
+      border-radius:7px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:20px;
+      flex-shrink:0;
+      transition:opacity .15s;
+    }
+    .hb:active{opacity:.7}
+    .hb.green{
+      background:linear-gradient(135deg,#5cb85c,#3a7a3a);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 4px rgba(0,0,0,.35);
+    }
+    .hb.gray{
+      background:linear-gradient(135deg,#909090,#686868);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 2px 4px rgba(0,0,0,.25);
+    }
+    .hb.chat-icon{
+      background:linear-gradient(135deg,#e6a817,#c8890f);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 4px rgba(0,0,0,.3);
+    }
+    .hb.menu-icon{
+      background:rgba(255,255,255,.18);
+    }
+
+    .hdr-center{
+      flex:1;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+    }
+    .hdr-room{font-size:15px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+    .hdr-timer{font-size:13px;font-weight:700;color:#fff;letter-spacing:1.5px;font-variant-numeric:tabular-nums;opacity:.9}
+
+    /* =========== BODY (SPLIT) =========== */
+    .body{
+      flex:1;
+      display:flex;
+      overflow:hidden;
+      min-height:0;
+      position:relative;
+    }
+
+    /* =========== LEFT: USERS PANEL =========== */
+    .users-panel{
+      position:absolute;
+      top:0;bottom:0;left:0;
+      width:280px;
+      max-width:80%;
+      z-index:150;
+      display:flex;flex-direction:column;
+      background:#fff;
+      border-right:1px solid #ccc;
+      overflow:hidden;
+      box-shadow:4px 0 12px rgba(0,0,0,0.15);
+      transform:translateX(-100%);
+      transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    .users-panel.open{
+      transform:translateX(0);
+    }
+
+    /* Overlay backdrop */
+    .overlay{
+      position:absolute;
+      top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.4);
+      z-index:140;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity 0.3s ease;
+    }
+    .overlay.open{
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    .user-row{
+      display:flex;
+      align-items:center;
+      padding:6px 8px 6px 10px;
+      border-bottom:1px solid #f2f2f2;
+      gap:8px;
+      min-height:42px;
+      cursor:pointer;
+      transition:background .1s;
+    }
+    .user-row:hover{background:#f8f8f8}
+    .user-row:nth-child(even){background:#fdfdfd}
+    .user-row:nth-child(even):hover{background:#f4f4f4}
+    .user-row.speaking{background:rgba(76,175,80,.1)!important;}
+
+    .ua{ /* user avatar */
+      width:32px;height:32px;
+      border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:14px;font-weight:800;color:#fff;
+      flex-shrink:0;
+      box-shadow:0 1px 4px rgba(0,0,0,.25);
+    }
+
+    .un{ /* user name */
+      flex:1;
+      font-size:14px;font-weight:700;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+
+    .ui{ /* user icon */
+      font-size:17px;flex-shrink:0;
+    }
+
+    /* =========== RIGHT: CHAT PANEL =========== */
+    .chat-panel{
+      flex:1;
+      display:flex;flex-direction:column;
+      background:#fff;
+      overflow:hidden;
+      min-width:0;
+    }
+
+    .msgs{
+      flex:1;
+      overflow-y:auto;
+      scroll-behavior:smooth;
+    }
+
+    .mrow{
+      padding:5px 8px 5px 12px;
+      border-bottom:1px solid #f0f0f0;
+      border-right:3px solid #d32f2f;
+      cursor:default;
+      animation:fin .2s ease;
+    }
+    @keyframes fin{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+    .mrow:hover{background:#fafafa}
+
+    .mrow-hdr{
+      display:flex;align-items:center;
+      justify-content:space-between;
+      margin-bottom:1px;
+    }
+    .mrow-name{font-size:13px;font-weight:800}
+    .mrow-time{font-size:10px;color:#aaa;direction:ltr;white-space:nowrap;flex-shrink:0}
+    .mrow-text{font-size:14px;font-weight:500;line-height:1.5;word-break:break-word}
+
+    .mrow.sys{
+      background:#f7f7f7;
+      border-right-color:#bbb;
+      text-align:center;
+    }
+    .mrow.sys .mrow-text{font-size:12px;color:#888;font-style:italic}
+
+    .typing-bar{
+      padding:4px 10px;
+      font-size:12px;color:#aaa;
+      display:flex;align-items:center;gap:5px;
+      min-height:24px;flex-shrink:0;
+    }
+    .td{width:5px;height:5px;border-radius:50%;background:#bbb;animation:tb 1.2s infinite;display:inline-block}
+    .td:nth-child(2){animation-delay:.2s}
+    .td:nth-child(3){animation-delay:.4s}
+    @keyframes tb{0%,60%,100%{transform:none}30%{transform:translateY(-4px)}}
+
+    /* =========== INPUT =========== */
+    .input-zone{
+      background:#c8c8c8;
+      border-top:2px solid #aaa;
+      flex-shrink:0;
+    }
+
+    .inp-bar{
+      display:flex;align-items:center;
+      padding:5px 7px;gap:5px;
+    }
+
+    .ibtn{
+      width:40px;height:40px;
+      border-radius:50%;
+      border:2px solid rgba(255,255,255,.55);
+      display:flex;align-items:center;justify-content:center;
+      font-size:20px;cursor:pointer;flex-shrink:0;
+      transition:all .15s;
+    }
+    .ibtn:active{transform:scale(.9)}
+
+    .ibtn.mic{background:rgba(255,255,255,.2);color:#444}
+    .ibtn.mic.on{background:rgba(76,175,80,.35);border-color:#4caf50;animation:pmic 1.5s infinite}
+    @keyframes pmic{0%,100%{box-shadow:0 0 0 0 rgba(76,175,80,.4)}50%{box-shadow:0 0 0 7px rgba(76,175,80,0)}}
+
+    .ibtn.cam{background:linear-gradient(135deg,#e91e63,#b71c5a);border-color:#e91e63}
+    .ibtn.emoji{background:#f5a623;border-color:#e09610;font-size:22px}
+    .ibtn.send{background:linear-gradient(135deg,#43a047,#2e7d32);border-color:#43a047;color:#fff;font-size:17px}
+
+    .inp-field{
+      flex:1;min-width:0;
+      background:#fff;
+      border:1px solid #bbb;
+      border-radius:20px;
+      padding:8px 14px;
+      font-family:'Tajawal',sans-serif;
+      font-size:15px;
+      outline:none;
+      text-align:right;
+      color:#333;
+    }
+    .inp-field::placeholder{color:#bbb}
+
+    .quick-bar{
+      display:flex;align-items:center;
+      padding:3px 10px 5px;
+      gap:14px;
+      border-top:1px solid #b8b8b8;
+    }
+    .qb{background:none;border:none;font-size:19px;cursor:pointer;opacity:.65;transition:opacity .1s;padding:2px}
+    .qb:hover,.qb:active{opacity:1}
+
+    .emoji-kb{
+      background:#ececec;
+      border-top:1px solid #bbb;
+      padding:6px;
+      display:none;
+      grid-template-columns:repeat(8,1fr);
+      gap:3px;
+      max-height:200px;
+      overflow-y:auto;
+    }
+    .emoji-kb.open{display:grid}
+    .eki{font-size:25px;text-align:center;padding:4px;cursor:pointer;border-radius:5px;transition:background .1s;line-height:1.2}
+    .eki:hover{background:rgba(0,0,0,.08)}
+
+    /* =========== VOICE STRIP (when in voice) =========== */
+    .vstrip{
+      display:none;
+      background:linear-gradient(90deg,#2e7d32,#388e3c);
+      color:#fff;
+      padding:3px 10px;
+      font-size:12px;font-weight:600;
+      align-items:center;gap:8px;
+      flex-shrink:0;
+      border-bottom:1px solid #1b5e20;
+    }
+    .vstrip.on{display:flex}
+    .vdot{width:7px;height:7px;border-radius:50%;background:#a5d6a7;animation:vdp 1s infinite}
+    @keyframes vdp{0%,100%{opacity:1}50%{opacity:.35}}
+    .vmute-btn,.vleave-btn{
+      border:1px solid rgba(255,255,255,.45);
+      background:rgba(255,255,255,.18);
+      color:#fff;padding:2px 10px;
+      border-radius:10px;font-size:11px;
+      cursor:pointer;font-family:'Tajawal',sans-serif;
+    }
+    .vleave-btn{background:rgba(198,40,40,.6);border-color:rgba(198,40,40,.8);margin-right:auto}
+
+    /* =========== TOAST =========== */
+    .toast-box{
+      position:fixed;bottom:130px;left:50%;transform:translateX(-50%);
+      z-index:999;display:flex;flex-direction:column;gap:5px;align-items:center;
+    }
+    .toast{
+      background:rgba(0,0,0,.72);color:#fff;
+      padding:7px 16px;border-radius:18px;
+      font-size:13px;white-space:nowrap;
+      animation:tin .25s ease;
+    }
+    @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .toast.err{background:rgba(198,40,40,.85)}
+
+    /* scrollbar */
+    ::-webkit-scrollbar{width:3px}
+    ::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+
+    /* context menu */
+    .ctxm{
+      position:fixed;background:#fff;border:1px solid #ddd;
+      border-radius:8px;padding:4px;z-index:700;
+      min-width:148px;box-shadow:0 4px 18px rgba(0,0,0,.15);display:none;
+    }
+    .ctxm.open{display:block}
+    .ctxi{
+      padding:8px 12px;font-size:13px;cursor:pointer;
+      border-radius:4px;font-family:'Tajawal',sans-serif;
+      color:#333;display:flex;align-items:center;gap:6px;
+    }
+    .ctxi:hover{background:#f5f5f5}
+    .ctxi.danger{color:#c62828}
+    .ctxi.danger:hover{background:#ffebee}
+  </style>
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast-box" id="toastBox"></div>
+
+<!-- Context Menu -->
+<div class="ctxm" id="ctxm">
+  <div class="ctxi" id="ctxKick">🚫 طرد من الغرفة</div>
+  <div class="ctxi danger" id="ctxBan">🔨 حظر</div>
+  <div class="ctxi" id="ctxAdmin">👑 تعيين مشرف</div>
+</div>
+
+<!-- ===== HEADER ===== -->
+<header class="hdr">
+  <button class="hb green" id="btnUsers" onclick="toggleUsers()" title="المستخدمون">👥</button>
+  <button class="hb gray"  id="btnSpeaker" onclick="toggleIncomingMute()">🔊</button>
+
+  <div class="hdr-center">
+    <span class="hdr-room" id="hdrRoom">الغرفة</span>
+    <span class="hdr-timer" id="hdrTimer">00:00</span>
+  </div>
+
+  <button class="hb chat-icon" id="btnChat" title="المحادثة">💬</button>
+  <button class="hb menu-icon" onclick="toggleMenu()">☰</button>
+</header>
+
+<!-- Voice active strip -->
+<div class="vstrip" id="vstrip">
+  <div class="vdot"></div>
+  <span>الغرفة الصوتية</span>
+  <span id="vstimer" style="font-variant-numeric:tabular-nums;letter-spacing:1px"></span>
+  <button class="vmute-btn" id="vmute" onclick="toggleMute()">🎤 كتم</button>
+  <button class="vleave-btn" onclick="leaveVoice()">✕ خروج</button>
+</div>
+
+<!-- ===== BODY (SPLIT) ===== -->
+<div class="body">
+  <div class="overlay" id="overlay" onclick="toggleUsers(false)"></div>
+
+  <!-- LEFT: Users Panel -->
+  <div class="users-panel" id="usersPanel">
+    <!-- filled by JS -->
+  </div>
+
+  <!-- RIGHT: Chat Panel -->
+  <div class="chat-panel">
+    <div class="msgs" id="msgs"></div>
+    <div class="typing-bar" id="typBar" style="display:none">
+      <div class="td"></div><div class="td"></div><div class="td"></div>
+      <span id="typText"></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== INPUT ===== -->
+<div class="input-zone">
+  <div class="inp-bar">
+    <button class="ibtn mic" id="micBtn" onclick="toggleVoice()" title="الغرفة الصوتية">🎤</button>
+    <button class="ibtn cam" title="كاميرا">📹</button>
+    <input class="inp-field" id="inp" type="text" placeholder="اكتب رسالة" dir="auto" maxlength="1000" autocomplete="off">
+    <button class="ibtn emoji" id="emojiBtn" onclick="toggleEmoji()">😊</button>
+    <button class="ibtn send" onclick="sendMsg()">➤</button>
+  </div>
+  <div class="quick-bar">
+    <button class="qb" onclick="qi('😊')">😊</button>
+    <button class="qb" onclick="qi('✋')">✋</button>
+    <button class="qb" onclick="qi('❤️')">❤️</button>
+    <button class="qb" onclick="qi('😂')">😂</button>
+    <button class="qb" onclick="qi('👍')">👍</button>
+    <button class="qb" onclick="qi('🌹')">🌹</button>
+    <button class="qb" onclick="qi('💡')">💡</button>
+    <button class="qb" onclick="qi('🔥')">🔥</button>
+  </div>
+  <div class="emoji-kb" id="ekb"></div>
+</div>
+
+<div id="audioBox" style="display:none"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+/* ===================================================
+   INIT
+=================================================== */
+const username = sessionStorage.getItem('chatUsername');
+const room     = sessionStorage.getItem('chatRoom');
+const myColor  = sessionStorage.getItem('chatColor') || '#e53935';
+
+if (!username || !room) { window.location.href = '/'; }
+
+document.getElementById('hdrRoom').textContent = room;
+document.title = room + ' - شات';
+
+/* Name colors palette */
+const COLORS=['#e53935','#d81b60','#8e24aa','#1e88e5','#00acc1','#43a047',
+              '#f4511e','#fb8c00','#00897b','#039be5','#6d4c41','#546e7a',
+              '#c0ca33','#7c4dff','#ff5252','#1565c0'];
+
+const TCOLORS=['#2e7d32','#1565c0','#4a148c','#bf360c','#006064','#4e342e',
+               '#1b5e20','#880e4f','#0d47a1','#33691e','#827717','#37474f'];
+
+function nc(name){let h=0;for(let c of name)h=c.charCodeAt(0)+((h<<5)-h);return COLORS[Math.abs(h)%COLORS.length]}
+function tc(name){let h=0;for(let c of name)h=c.charCodeAt(0)+((h<<5)-h)+7;return TCOLORS[Math.abs(h)%TCOLORS.length]}
+
+/* ===================================================
+   SOCKET
+=================================================== */
+const socket = io({ transports:['websocket','polling'] });
+
+socket.on('connect',()=>{
+  loadHistory();
+  socket.emit('join_room',{username,room,color:myColor});
+});
+socket.on('disconnect',()=>toast('انقطع الاتصال...',true));
+socket.on('reconnect',()=>socket.emit('join_room',{username,room,color:myColor}));
+
+socket.on('joined_room', d=>{
+  renderUsers(d.users||[]);
+  sysMsg(`مرحباً ${d.username} في غرفة ${d.room} 👋`);
+  if (d.speaker) {
+    activeSpeaker = d.speaker;
+    document.getElementById('vstrip').classList.add('on');
+    document.getElementById('vmute').style.display = 'none';
+    startClientTimer(d.speaker.timeLeft);
+    if (d.speaker.username !== username) {
+      connectToSpeaker(d.speaker.username);
+    }
+  }
+  if (d.queue) {
+    micQueueList = d.queue.map(q => q.username);
+    isQueued = micQueueList.includes(username);
+    if (isQueued) {
+      document.getElementById('micBtn').classList.add('on');
+    }
+  }
+  renderUsers(chatUsers);
+});
+socket.on('user_joined', d=>{
+  renderUsers(d.users||[]);
+  sysMsg(`${d.username} انضم للغرفة 👋`);
+});
+socket.on('user_left', d=>{
+  renderUsers(d.users||[]);
+  if(d.kickedBy) sysMsg(`تم طرد ${d.username} 🚫`);
+  else sysMsg(`${d.username} غادر الغرفة`);
+  if(pcs[d.username]) {
+    pcs[d.username].close();
+    delete pcs[d.username];
+  }
+});
+socket.on('new_message', d=>{
+  if(d.type==='system'||d.username==='النظام') sysMsg(d.message);
+  else addMsg(d);
+});
+socket.on('user_typing',({username:u,isTyping:t})=>{
+  if(u===username)return;
+  document.getElementById('typBar').style.display=t?'flex':'none';
+  document.getElementById('typText').textContent=t?`${u} يكتب...`:'';
+});
+socket.on('kicked',({message:m})=>{toast(m,true);setTimeout(()=>location.href='/',2500)});
+socket.on('banned',({message:m})=>{sysMsg('🚫 '+m);setTimeout(()=>location.href='/',3000)});
+socket.on('chat_cleared',({by})=>{document.getElementById('msgs').innerHTML='';sysMsg(`مسح المحادثة بواسطة ${by}`)});
+socket.on('error_msg',({message:m})=>toast(m,true));
+
+/* ===================================================
+   USERS PANEL
+=================================================== */
+let chatUsers=[];
+let isAdmin=false;
+let ctxTarget=null;
+
+function renderUsers(users){
+  chatUsers=users;
+  const p=document.getElementById('usersPanel');
+  p.innerHTML='';
+  if(!users.length){
+    p.innerHTML='<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">لا يوجد متصلون</div>';
+    return;
+  }
+  users.forEach(u=>{
+    const clr=u.color||nc(u.username);
+    const isMe=u.username===username;
+
+    const isSpk = activeSpeaker && activeSpeaker.username === u.username;
+    const qIdx = micQueueList.findIndex(qUser => qUser === u.username);
+
+    let icon = '';
+    let isSpeaking = false;
+
+    if (isSpk) {
+      icon = '🎤';
+      if (voiceMap.has(u.username) && voiceMap.get(u.username).speaking) {
+        isSpeaking = true;
+      }
+    } else if (qIdx !== -1) {
+      icon = `✋ ${qIdx + 1}`;
+    } else {
+      const icons = ['✋','🤚','✋'];
+      let h = 0; for(let c of u.username) h = c.charCodeAt(0) + ((h<<5)-h);
+      icon = icons[Math.abs(h)%icons.length];
+    }
+
+    const row=document.createElement('div');
+    row.className='user-row'+(isSpeaking?' speaking':'');
+    row.innerHTML=`
+      <div class="ua" style="background:${clr}">${u.username[0]}</div>
+      <span class="un" style="color:${clr}">${esc(u.username)}${isMe?' (أنت)':''}</span>
+      <span class="ui" style="font-size:13px; font-weight:bold; color:#e09610">${icon}</span>
+    `;
+    if(!isMe&&isAdmin){
+      row.addEventListener('contextmenu',e=>showCtx(e,u.username));
+      row.addEventListener('click',e=>showCtx(e,u.username));
+    }
+    p.appendChild(row);
+  });
+}
+
+/* ===================================================
+   MESSAGES
+=================================================== */
+async function loadHistory(){
+  try{
+    const r=await fetch(`/api/messages/${encodeURIComponent(room)}`);
+    const d=await r.json();
+    if(d.success&&d.messages.length){
+      document.getElementById('msgs').innerHTML='';
+      d.messages.forEach(m=>{
+        if(m.message_type==='system') sysMsg(m.message);
+        else addMsg({username:m.username,message:m.message,color:nc(m.username),time:ft(new Date(m.created_at))});
+      });
+      scrollDown();
+    }
+  }catch(e){}
+}
+
+function addMsg(d){
+  const box=document.getElementById('msgs');
+  const clr=d.color||nc(d.username);
+  const tclr=tc(d.username);
+  const isMe=d.username===username;
+  const row=document.createElement('div');
+  row.className='mrow';
+  row.innerHTML=`
+    <div class="mrow-hdr">
+      <span class="mrow-name" style="color:${clr}">${esc(d.username)}</span>
+      <span class="mrow-time">${d.time||ft()}</span>
+    </div>
+    <div class="mrow-text" style="color:${isMe?clr:tclr}">${fmsg(d.message)}</div>
+  `;
+  if(!isMe&&isAdmin) row.addEventListener('contextmenu',e=>showCtx(e,d.username));
+  box.appendChild(row);
+  scrollDown();
+}
+
+function sysMsg(text){
+  const box=document.getElementById('msgs');
+  const row=document.createElement('div');
+  row.className='mrow sys';
+  row.innerHTML=`<div class="mrow-text">${esc(text)}</div>`;
+  box.appendChild(row);
+  scrollDown();
+}
+
+function scrollDown(){
+  const b=document.getElementById('msgs');
+  b.scrollTop=b.scrollHeight;
+}
+
+/* ===================================================
+   SEND
+=================================================== */
+const inp=document.getElementById('inp');
+let typTimer=null,isTyping=false;
+
+function sendMsg(){
+  const msg=inp.value.trim();
+  if(!msg)return;
+  socket.emit('send_message',{message:msg});
+  inp.value='';stopTyp();closeEmoji();
+}
+inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}});
+inp.addEventListener('input',()=>{
+  if(!isTyping){isTyping=true;socket.emit('typing',{isTyping:true})}
+  clearTimeout(typTimer);typTimer=setTimeout(stopTyp,2000);
+});
+function stopTyp(){
+  if(isTyping){isTyping=false;socket.emit('typing',{isTyping:false})}
+  clearTimeout(typTimer);
+}
+
+/* ===================================================
+   EMOJI
+=================================================== */
+const EMOJIS=['😀','😂','🤣','😍','🥰','😊','😎','🤩','😏','😢','😭','😤','😡','🤔','🤗',
+  '😴','🥳','😇','🤠','🤯','👀','😘','😅','🙄','😬','😈','👻','🥺','🤫','🤑',
+  '❤️','💔','💯','🔥','⭐','🎉','🎊','✅','❌','🚀','💪','🙏','👋','📢','🌹',
+  '🌺','🌸','🌼','🌻','🍀','🌈','⚡','❄️','🌊','🔑','💎','🏆','🎯','🎵','🎤',
+  '👍','👎','✋','🤚','👌','✌️','🤞','💅','🦋','🐱','🐶','🐻','🐼','🐸','🦁',
+  '🍕','🍔','🍩','🎂','🍭','☕','🧃','🎁','📱','💻','🎮','⚽','🏀','🎵','🎸'];
+
+const ekb=document.getElementById('ekb');
+EMOJIS.forEach(e=>{const d=document.createElement('div');d.className='eki';d.textContent=e;d.onclick=()=>qi(e);ekb.appendChild(d)});
+
+function qi(e){inp.value+=e;inp.focus()}
+function toggleEmoji(){ekb.classList.toggle('open')}
+function closeEmoji(){ekb.classList.remove('open')}
+document.addEventListener('click',e=>{if(!e.target.closest('#ekb')&&e.target.id!=='emojiBtn')closeEmoji()});
+
+/* ===================================================
+   VOICE ROOM (WebRTC & Queue System)
+=================================================== */
+const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+
+let isSpeaker = false, isQueued = false;
+let activeSpeaker = null, micQueueList = [];
+let activeSpeakerSeconds = 0, speakerTimerInt = null;
+let isMuted = false, isSpeakerMuted = false;
+let localStream = null, pcs = {}, speakDets = {};
+let voiceMap = new Map(); // username -> {speaking}
+
+function toggleVoice() {
+  handleMicButtonClick();
+}
+
+function handleMicButtonClick() {
+  if (isSpeaker) {
+    socket.emit('leave_mic');
+    stopSpeakerMic();
+  } else if (isQueued) {
+    socket.emit('leave_mic');
+    isQueued = false;
+    document.getElementById('micBtn').classList.remove('on');
+    toast('✋ تم إنزال اليد والتراجع عن طلب المايك');
+  } else {
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      .then(stream => {
+        stream.getTracks().forEach(t => t.stop()); // request permission only
+        socket.emit('request_mic');
+        isQueued = true;
+        document.getElementById('micBtn').classList.add('on');
+        toast('✋ تم رفع اليد والانضمام لطابور المايك');
+      })
+      .catch(e => {
+        toast('⚠️ يرجى السماح بالوصول للميكروفون للمشاركة في الصوت', true);
+      });
+  }
+}
+
+async function startSpeakerMic(){
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+  } catch(e) {
+    toast('⚠️ يرجى السماح بالوصول للميكروفون لبدء الكلام', true);
+    socket.emit('leave_mic');
+    return;
+  }
+  
+  isSpeaker = true;
+  isQueued = false;
+  isMuted = false;
+  
+  document.getElementById('micBtn').classList.add('on');
+  document.getElementById('vstrip').classList.add('on');
+  document.getElementById('vmute').style.display = 'inline-block';
+  document.getElementById('vmute').textContent = '🎤 كتم';
+  
+  toast('🎤 المايك معك الآن! لديك 3 دقائق.');
+  
+  activeSpeaker = { username: username, color: myColor, timeLeft: 180 };
+  startClientTimer(180);
+  
+  startSD(username, localStream, true);
+  
+  // Connect to all listeners
+  chatUsers.forEach(u => {
+    if (u.username !== username) {
+      getPC(u.username);
+    }
+  });
+  
+  renderUsers(chatUsers);
+}
+
+function stopSpeakerMic(){
+  if(!isSpeaker) return;
+  isSpeaker = false;
+  isQueued = false;
+  
+  Object.values(pcs).forEach(p => p.close());
+  pcs = {};
+  
+  if(localStream){
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+  }
+  
+  document.getElementById('audioBox').innerHTML = '';
+  Object.values(speakDets).forEach(id => clearInterval(id));
+  speakDets = {};
+  
+  document.getElementById('micBtn').classList.remove('on');
+  document.getElementById('vstrip').classList.remove('on');
+  
+  clearInterval(speakerTimerInt);
+  document.getElementById('hdrTimer').textContent = '00:00';
+  document.getElementById('vstimer').textContent = '';
+  
+  toast('🔇 غادرت المايك');
+  renderUsers(chatUsers);
+}
+
+function stopListening(){
+  Object.values(pcs).forEach(p => p.close());
+  pcs = {};
+  document.getElementById('audioBox').innerHTML = '';
+  Object.values(speakDets).forEach(id => clearInterval(id));
+  speakDets = {};
+  
+  clearInterval(speakerTimerInt);
+  document.getElementById('hdrTimer').textContent = '00:00';
+  document.getElementById('vstimer').textContent = '';
+  
+  document.getElementById('vstrip').classList.remove('on');
+  
+  activeSpeaker = null;
+  renderUsers(chatUsers);
+}
+
+function toggleMute(){
+  if(!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  document.getElementById('vmute').textContent = isMuted ? '🔇 رفع الكتم' : '🎤 كتم';
+  socket.emit('voice_mute', { room, muted: isMuted });
+  toast(isMuted ? '🔇 تم كتم المايك الخاص بك' : '🎤 تم تفعيل المايك الخاص بك');
+}
+
+function toggleIncomingMute(){
+  isSpeakerMuted = !isSpeakerMuted;
+  const audios = document.getElementById('audioBox').querySelectorAll('audio');
+  audios.forEach(a => a.muted = isSpeakerMuted);
+  document.getElementById('btnSpeaker').textContent = isSpeakerMuted ? '🔇' : '🔊';
+  toast(isSpeakerMuted ? '🔇 تم كتم الصوت الوارد' : '🔊 تم تشغيل الصوت الوارد');
+}
+
+function startClientTimer(seconds) {
+  clearInterval(speakerTimerInt);
+  activeSpeakerSeconds = seconds;
+  
+  const updateTimerDisplay = () => {
+    const m = String(Math.floor(activeSpeakerSeconds / 60)).padStart(2, '0');
+    const s = String(activeSpeakerSeconds % 60).padStart(2, '0');
+    document.getElementById('hdrTimer').textContent = `${m}:${s}`;
+    document.getElementById('vstimer').textContent = `${m}:${s}`;
+  };
+  
+  updateTimerDisplay();
+  
+  speakerTimerInt = setInterval(() => {
+    activeSpeakerSeconds--;
+    if (activeSpeakerSeconds <= 0) {
+      clearInterval(speakerTimerInt);
+      document.getElementById('hdrTimer').textContent = '00:00';
+      document.getElementById('vstimer').textContent = '';
+    } else {
+      updateTimerDisplay();
+    }
+  }, 1000);
+}
+
+async function connectToSpeaker(speakerName) {
+  try {
+    const pc = getPC(speakerName);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('voice_offer', { to: speakerName, offer });
+  } catch(e) {
+    console.error("Error connecting to speaker:", e);
+  }
+}
+
+/* Signaling Events */
+socket.on('speaker_changed', d => {
+  if (d) {
+    activeSpeaker = d;
+    document.getElementById('vstrip').classList.add('on');
+    document.getElementById('vmute').style.display = 'none';
+    startClientTimer(d.timeLeft);
+    if (d.username !== username) {
+      connectToSpeaker(d.username);
+    }
+  } else {
+    if (!isSpeaker) {
+      stopListening();
+    }
+  }
+  renderUsers(chatUsers);
+});
+
+socket.on('queue_updated', d => {
+  micQueueList = (d.queue || []).map(q => q.username);
+  
+  const myPos = micQueueList.indexOf(username);
+  if (myPos !== -1) {
+    isQueued = true;
+    document.getElementById('micBtn').classList.add('on');
+  } else {
+    isQueued = false;
+    if (!isSpeaker) {
+      document.getElementById('micBtn').classList.remove('on');
+    }
+  }
+  
+  renderUsers(chatUsers);
+});
+
+socket.on('mic_assigned', () => {
+  startSpeakerMic();
+});
+
+socket.on('mic_demoted', () => {
+  stopSpeakerMic();
+  toast('⏰ انتهى وقت المايك الخاص بك (3 دقائق)');
+});
+
+socket.on('voice_offer', async ({ from, offer }) => {
+  if (!isSpeaker) return;
+  const pc = getPC(from);
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  socket.emit('voice_answer', { to: from, answer: ans });
+});
+
+socket.on('voice_answer', async ({ from, answer }) => {
+  if (pcs[from]) {
+    await pcs[from].setRemoteDescription(new RTCSessionDescription(answer));
+  }
+});
+
+socket.on('voice_ice', async ({ from, candidate }) => {
+  if (pcs[from]) {
+    try {
+      await pcs[from].addIceCandidate(new RTCIceCandidate(candidate));
+    } catch(e) {}
+  }
+});
+
+socket.on('voice_mute_update', ({ username: u, muted }) => {
+  if (voiceMap.has(u)) {
+    voiceMap.get(u).muted = muted;
+  }
+});
+
+socket.on('voice_speaking', ({ username: u, speaking }) => setSpeaking(u, speaking));
+
+function getPC(user){
+  if(pcs[user]) return pcs[user];
+  const pc = new RTCPeerConnection(STUN);
+  pcs[user] = pc;
+  
+  if(isSpeaker && localStream) {
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  }
+  
+  pc.onicecandidate = e => {
+    if(e.candidate) socket.emit('voice_ice', { to: user, candidate: e.candidate });
+  };
+  
+  pc.ontrack = e => {
+    addAudio(user, e.streams[0]);
+    startSD(user, e.streams[0], false);
+  };
+  
+  pc.onconnectionstatechange = () => {
+    if(['failed','disconnected'].includes(pc.connectionState)) {
+      pc.close();
+      delete pcs[user];
+    }
+  };
+  
+  return pc;
+}
+
+function addAudio(user, stream){
+  let a = document.getElementById('a-' + user);
+  if(!a){
+    a = document.createElement('audio');
+    a.id = 'a-' + user;
+    a.autoplay = true;
+    a.playsInline = true;
+    document.getElementById('audioBox').appendChild(a);
+  }
+  a.srcObject = stream;
+  a.muted = isSpeakerMuted; // match current speaker volume setting
+  
+  a.play().catch(e => {
+    console.log("Autoplay blocked, waiting for interaction:", e);
+    const playOnInteraction = () => {
+      a.play().then(() => {
+        document.removeEventListener('click', playOnInteraction);
+      }).catch(() => {});
+    };
+    document.addEventListener('click', playOnInteraction);
+  });
+}
+
+function dropVoiceUser(user){
+  if(pcs[user]){pcs[user].close();delete pcs[user]}
+  const a=document.getElementById('a-'+user);if(a)a.remove();
+  if(speakDets[user]){clearInterval(speakDets[user]);delete speakDets[user]}
+  renderUsers(chatUsers);
+}
+function startSD(user,stream,isLocal){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const an=ctx.createAnalyser();
+    ctx.createMediaStreamSource(stream).connect(an);
+    an.fftSize=512;const data=new Uint8Array(an.frequencyBinCount);
+    const id=setInterval(()=>{
+      if(!inVoice){clearInterval(id);return}
+      if(isLocal&&isMuted){setSpeaking(user,false);return}
+      an.getByteFrequencyData(data);
+      const avg=data.reduce((a,b)=>a+b,0)/data.length;
+      const spk=avg>15;
+      const prev=voiceMap.has(user)?voiceMap.get(user).speaking:false;
+      if(prev!==spk){setSpeaking(user,spk);if(isLocal)socket.emit('voice_speaking',{room,speaking:spk})}
+    },100);
+    speakDets[user]=id;
+  }catch(e){}
+}
+function setSpeaking(user,spk){
+  if(voiceMap.has(user)){voiceMap.get(user).speaking=spk;renderUsers(chatUsers)}
+}
+
+/* ===================================================
+   ADMIN / CONTEXT MENU
+=================================================== */
+function showCtx(e,user){
+  e.preventDefault();ctxTarget=user;
+  const m=document.getElementById('ctxm');
+  m.style.top=e.clientY+'px';m.style.right=(window.innerWidth-e.clientX)+'px';m.style.left='auto';
+  m.classList.add('open');
+}
+document.addEventListener('click',()=>document.getElementById('ctxm').classList.remove('open'));
+document.getElementById('ctxKick').onclick=()=>{if(ctxTarget&&confirm(`طرد ${ctxTarget}؟`))socket.emit('kick_user',{targetUsername:ctxTarget})};
+document.getElementById('ctxBan').onclick=()=>{if(ctxTarget){const r=prompt('سبب الحظر:');socket.emit('ban_user',{targetUsername:ctxTarget,reason:r||'لا يوجد سبب'})}};
+document.getElementById('ctxAdmin').onclick=()=>{if(ctxTarget&&confirm(`تعيين ${ctxTarget} مشرفاً؟`))socket.emit('make_admin',{targetUsername:ctxTarget})};
+
+setTimeout(()=>{isAdmin=true},600);
+
+function toggleMenu(){toast('غرفة: '+room)}
+
+function toggleUsers(show){
+  const p = document.getElementById('usersPanel');
+  const o = document.getElementById('overlay');
+  if(show === undefined) show = !p.classList.contains('open');
+  if(show){
+    p.classList.add('open');
+    o.classList.add('open');
+  } else {
+    p.classList.remove('open');
+    o.classList.remove('open');
+  }
+}
+
+/* ===================================================
+   UTILS
+=================================================== */
+function ft(d=new Date()){return d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',hour12:true})}
+function esc(s){if(!s)return'';const d=document.createElement('div');d.appendChild(document.createTextNode(s));return d.innerHTML}
+function fmsg(t){let s=esc(t);s=s.replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" style="color:#1565c0">$1</a>');return s}
+function toast(msg,err){
+  const b=document.getElementById('toastBox');
+  const t=document.createElement('div');
+  t.className='toast'+(err?' err':'');t.textContent=msg;b.appendChild(t);
+  setTimeout(()=>t.remove(),2800);
+}
+
+window.addEventListener('beforeunload',()=>{if(inVoice)leaveVoice()});
+</script>
+</body>
+</html>

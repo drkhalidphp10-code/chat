@@ -152,7 +152,8 @@ const inMemoryAdmins = {};
 // ============================================
 const onlineUsers = new Map(); // socketId -> { username, room, color, id }
 const roomUsers = new Map();   // roomName -> Set of socketIds
-const voiceRooms = new Map();  // roomName -> Map<socketId, {username, color, muted}>
+const micQueues = new Map();    // roomName -> Array of { socketId, username, color }
+const activeSpeakers = new Map(); // roomName -> { socketId, username, color, expiresAt, timer }
 
 // ============================================
 // Helper: Get Color from Username
@@ -366,12 +367,21 @@ io.on('connection', (socket) => {
       users: usersInRoom
     });
 
+    const activeSpk = activeSpeakers.get(cleanRoom);
+    const qList = micQueues.get(cleanRoom) || [];
+
     socket.emit('joined_room', {
       room: cleanRoom,
       username: cleanUser,
       color: userColor,
       users: usersInRoom,
-      time: formatTime()
+      time: formatTime(),
+      speaker: activeSpk ? {
+        username: activeSpk.username,
+        color: activeSpk.color,
+        timeLeft: Math.max(0, Math.round((activeSpk.expiresAt - Date.now()) / 1000))
+      } : null,
+      queue: qList.map(q => ({ username: q.username, color: q.color }))
     });
 
     // Save to DB
@@ -620,51 +630,66 @@ io.on('connection', (socket) => {
         usersCount: usersInRoom.length
       });
 
-      // Leave voice room if in one
-      if (voiceRooms.has(user.room)) {
-        voiceRooms.get(user.room).delete(socket.id);
-        socket.to(user.room).emit('voice_user_left', { username: user.username });
-      }
+      // Leave mic or queue if they were in it
+      leaveMic(socket, user.room);
 
       console.log(`👋 ${user.username} غادر الغرفة: ${user.room}`);
     }
   });
 
   // -----------------------------------------------
-  // VOICE ROOM EVENTS
+  // VOICE / MIC QUEUE EVENTS
   // -----------------------------------------------
 
-  socket.on('join_voice', ({ room: voiceRoom, color }) => {
+  socket.on('request_mic', () => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
 
-    if (!voiceRooms.has(voiceRoom)) voiceRooms.set(voiceRoom, new Map());
-    voiceRooms.get(voiceRoom).set(socket.id, { username: user.username, color, muted: false });
+    const roomName = user.room;
+    if (!micQueues.has(roomName)) micQueues.set(roomName, []);
+    const queue = micQueues.get(roomName);
 
-    // Tell others I joined
-    socket.to(voiceRoom).emit('voice_user_joined', { username: user.username, color });
+    const speaker = activeSpeakers.get(roomName);
+    if (!speaker) {
+      // Direct promotion
+      const expiresAt = Date.now() + 180000;
+      activeSpeakers.set(roomName, {
+        socketId: socket.id,
+        username: user.username,
+        color: user.color,
+        expiresAt: expiresAt
+      });
 
-    // Send me current voice users
-    const currentVoiceUsers = [];
-    for (const [sid, u] of voiceRooms.get(voiceRoom).entries()) {
-      if (sid !== socket.id) currentVoiceUsers.push(u);
+      socket.emit('mic_assigned');
+      io.to(roomName).emit('speaker_changed', {
+        username: user.username,
+        color: user.color,
+        timeLeft: 180
+      });
+      startSpeakerTimer(roomName);
+    } else {
+      // Add to queue if not already there and not the speaker
+      if (speaker.socketId !== socket.id && !queue.some(q => q.socketId === socket.id)) {
+        queue.push({
+          socketId: socket.id,
+          username: user.username,
+          color: user.color
+        });
+
+        io.to(roomName).emit('queue_updated', {
+          queue: queue.map(q => ({ username: q.username, color: q.color }))
+        });
+      }
     }
-    socket.emit('voice_room_users', { users: currentVoiceUsers });
-
-    console.log(`🎤 ${user.username} انضم للغرفة الصوتية: ${voiceRoom}`);
   });
 
-  socket.on('leave_voice', ({ room: voiceRoom }) => {
+  socket.on('leave_mic', () => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
-    if (voiceRooms.has(voiceRoom)) {
-      voiceRooms.get(voiceRoom).delete(socket.id);
-    }
-    socket.to(voiceRoom).emit('voice_user_left', { username: user.username });
-    console.log(`🔇 ${user.username} غادر الغرفة الصوتية`);
+    leaveMic(socket, user.room);
   });
 
-  // WebRTC Signaling
+  // WebRTC Signaling for Single-Speaker Star Topology
   socket.on('voice_offer', ({ to, offer }) => {
     const targetSocket = findSocketByUsername(to);
     if (targetSocket) {
@@ -692,9 +717,6 @@ io.on('connection', (socket) => {
   socket.on('voice_mute', ({ room: voiceRoom, muted }) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
-    if (voiceRooms.has(voiceRoom) && voiceRooms.get(voiceRoom).has(socket.id)) {
-      voiceRooms.get(voiceRoom).get(socket.id).muted = muted;
-    }
     socket.to(voiceRoom).emit('voice_mute_update', { username: user.username, muted });
   });
 
@@ -743,6 +765,83 @@ async function checkIsAdmin(username, roomName) {
     }
   } else {
     return (inMemoryAdmins[roomName] || []).includes(username);
+  }
+}
+
+function startSpeakerTimer(roomName) {
+  const speaker = activeSpeakers.get(roomName);
+  if (!speaker) return;
+
+  speaker.timer = setTimeout(() => {
+    console.log(`⏰ انتهى وقت مايك ${speaker.username} في غرفة ${roomName}`);
+
+    io.to(roomName).emit('new_message', {
+      id: uuidv4(),
+      username: 'النظام',
+      color: '#ff6b6b',
+      message: `انتهى وقت المايك الخاص بـ ${speaker.username} (3 دقائق)، تم الانتقال للتالي`,
+      time: formatTime(),
+      type: 'system'
+    });
+
+    demoteSpeaker(roomName);
+  }, 180000);
+}
+
+function demoteSpeaker(roomName) {
+  const speaker = activeSpeakers.get(roomName);
+  if (!speaker) return;
+
+  clearTimeout(speaker.timer);
+  activeSpeakers.delete(roomName);
+
+  // Notify the demoted speaker
+  io.to(speaker.socketId).emit('mic_demoted');
+
+  // Check queue
+  const queue = micQueues.get(roomName) || [];
+  if (queue.length > 0) {
+    const nextSpeaker = queue.shift();
+    const expiresAt = Date.now() + 180000;
+    activeSpeakers.set(roomName, {
+      socketId: nextSpeaker.socketId,
+      username: nextSpeaker.username,
+      color: nextSpeaker.color,
+      expiresAt: expiresAt
+    });
+
+    io.to(nextSpeaker.socketId).emit('mic_assigned');
+    io.to(roomName).emit('speaker_changed', {
+      username: nextSpeaker.username,
+      color: nextSpeaker.color,
+      timeLeft: 180
+    });
+    io.to(roomName).emit('queue_updated', {
+      queue: queue.map(q => ({ username: q.username, color: q.color }))
+    });
+    startSpeakerTimer(roomName);
+  } else {
+    io.to(roomName).emit('speaker_changed', null);
+    io.to(roomName).emit('queue_updated', { queue: [] });
+  }
+}
+
+function leaveMic(socket, roomName) {
+  const speaker = activeSpeakers.get(roomName);
+  if (speaker && speaker.socketId === socket.id) {
+    console.log(`🎤 ${speaker.username} غادر المايك اختيارياً في غرفة ${roomName}`);
+    demoteSpeaker(roomName);
+    return;
+  }
+
+  const queue = micQueues.get(roomName) || [];
+  const idx = queue.findIndex(q => q.socketId === socket.id);
+  if (idx !== -1) {
+    const removed = queue.splice(idx, 1)[0];
+    console.log(`✋ ${removed.username} غادر طابور الانتظار في غرفة ${roomName}`);
+    io.to(roomName).emit('queue_updated', {
+      queue: queue.map(q => ({ username: q.username, color: q.color }))
+    });
   }
 }
 
