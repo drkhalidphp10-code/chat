@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة الإدارة - شات عربي</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: var(--bg-darkest); min-height: 100vh; }
+
+    .admin-layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: 64px 1fr;
+      grid-template-areas: "admin-nav admin-header" "admin-nav admin-content";
+    }
+
+    @media (max-width: 768px) {
+      .admin-layout {
+        grid-template-columns: 1fr;
+        grid-template-areas: "admin-header" "admin-content";
+      }
+      .admin-nav { display: none !important; }
+    }
+
+    /* Nav */
+    .admin-nav {
+      grid-area: admin-nav;
+      background: var(--bg-dark);
+      border-left: 1px solid var(--border);
+      padding: 20px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-logo {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-accent);
+      padding: 0 8px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      transition: var(--transition);
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: rgba(124, 58, 237, 0.15); color: var(--text-accent); }
+    .nav-icon { font-size: 18px; }
+
+    /* Header */
+    .admin-header {
+      grid-area: admin-header;
+      background: var(--bg-medium);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .admin-header-title { font-size: 18px; font-weight: 700; }
+
+    /* Content */
+    .admin-content {
+      grid-area: admin-content;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    /* Login Gate */
+    .login-gate {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .login-gate-card {
+      width: 100%;
+      max-width: 380px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .login-gate-icon { font-size: 48px; margin-bottom: 16px; }
+    .login-gate-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; }
+    .login-gate-sub { color: var(--text-secondary); margin-bottom: 24px; }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      transition: var(--transition);
+    }
+    .stat-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+
+    .stat-icon { font-size: 32px; margin-bottom: 12px; }
+    .stat-value { font-size: 2rem; font-weight: 900; color: var(--text-primary); }
+    .stat-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Section */
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-accent);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .data-table th {
+      text-align: right;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .data-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+      vertical-align: middle;
+    }
+
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg-hover); }
+
+    .table-wrapper {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    /* Room Bar */
+    .room-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-medium);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+    }
+
+    .room-bar-fill {
+      height: 6px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.5s ease;
+    }
+
+    /* Page sections */
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Login Gate -->
+<div class="login-gate" id="loginGate">
+  <div class="glass-card login-gate-card">
+    <div class="login-gate-icon">👑</div>
+    <h1 class="login-gate-title">لوحة الإدارة</h1>
+    <p class="login-gate-sub">أدخل كلمة مرور المدير للمتابعة</p>
+    <div class="flex flex-col gap-3">
+      <input type="password" id="adminPassword" class="form-input" placeholder="كلمة المرور...">
+      <button class="btn btn-primary w-full" onclick="adminLogin()">دخول</button>
+      <a href="/" class="btn btn-ghost w-full">← العودة للدردشة</a>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Layout (hidden until logged in) -->
+<div class="admin-layout" id="adminLayout" style="display:none">
+
+  <!-- Navigation -->
+  <nav class="admin-nav">
+    <div class="nav-logo">👑 الإدارة</div>
+    <div class="nav-item active" onclick="showPage('dashboard', this)">
+      <span class="nav-icon">📊</span> لوحة التحكم
+    </div>
+    <div class="nav-item" onclick="showPage('rooms', this)">
+      <span class="nav-icon">🏠</span> إدارة الغرف
+    </div>
+    <div class="nav-item" onclick="showPage('stats', this)">
+      <span class="nav-icon">📈</span> الإحصائيات
+    </div>
+    <div style="margin-top:auto;">
+      <a href="/" class="nav-item" style="color:var(--danger);text-decoration:none;">
+        <span class="nav-icon">🚪</span> العودة للدردشة
+      </a>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="admin-header">
+    <div class="admin-header-title" id="pageTitle">📊 لوحة التحكم</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="online-dot"></div>
+      <span style="font-size:13px;color:var(--text-secondary);">النظام يعمل</span>
+      <button class="btn btn-ghost btn-sm" onclick="refreshStats()">🔄 تحديث</button>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="admin-content">
+
+    <!-- Dashboard Page -->
+    <div class="page-section active" id="page-dashboard">
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value" id="statOnline">-</div>
+          <div class="stat-label">متصل الآن</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🏠</div>
+          <div class="stat-value" id="statRooms">-</div>
+          <div class="stat-label">غرف نشطة</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💬</div>
+          <div class="stat-value" id="statMessages">-</div>
+          <div class="stat-label">إجمالي الرسائل</div>
+        </div>
+      </div>
+
+      <div class="section-title">🏠 نشاط الغرف</div>
+      <div id="roomsBarsContainer"></div>
+
+    </div>
+
+    <!-- Rooms Page -->
+    <div class="page-section" id="page-rooms">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div class="section-title" style="margin:0">🏠 الغرف المتاحة</div>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>اسم الغرفة</th>
+              <th>النوع</th>
+              <th>المتصلون</th>
+              <th>الوصف</th>
+            </tr>
+          </thead>
+          <tbody id="roomsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Stats Page -->
+    <div class="page-section" id="page-stats">
+      <div class="section-title">📈 إحصائيات مفصلة</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value" id="statPeak">-</div>
+          <div class="stat-label">أعلى غرفة نشاطاً</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🌐</div>
+          <div class="stat-value" id="statTotal">-</div>
+          <div class="stat-label">إجمالي الغرف</div>
+        </div>
+      </div>
+
+      <div class="section-title">📊 توزيع المستخدمين</div>
+      <div id="statsRoomDetails"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let adminPass = '';
+
+function adminLogin() {
+  const pass = document.getElementById('adminPassword').value;
+  if (!pass) { showToast('أدخل كلمة المرور', 'error'); return; }
+  adminPass = pass;
+  loadStats();
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch(`/api/admin/stats?password=${encodeURIComponent(adminPass)}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast('كلمة مرور خاطئة', 'error');
+      return;
+    }
+    // Show admin layout
+    document.getElementById('loginGate').style.display = 'none';
+    document.getElementById('adminLayout').style.display = 'grid';
+
+    const { stats } = data;
+    updateDashboard(stats);
+    loadRoomsTable();
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
+}
+
+function updateDashboard(stats) {
+  document.getElementById('statOnline').textContent = stats.totalOnline;
+  document.getElementById('statRooms').textContent = stats.totalRooms;
+  document.getElementById('statMessages').textContent = stats.totalMessages.toLocaleString('ar');
+
+  // Room bars
+  const container = document.getElementById('roomsBarsContainer');
+  container.innerHTML = '';
+  const maxCount = Math.max(...(stats.roomStats.map(r => r.count)), 1);
+  stats.roomStats.forEach(r => {
+    const pct = Math.round((r.count / maxCount) * 100);
+    const item = document.createElement('div');
+    item.className = 'room-bar-item';
+    item.innerHTML = `
+      <span style="min-width:80px;font-weight:700;font-size:14px;">${escapeHtml(r.room)}</span>
+      <div style="flex:1;background:var(--bg-dark);border-radius:999px;height:6px;">
+        <div class="room-bar-fill" style="width:${pct}%"></div>
+      </div>
+      <span style="min-width:40px;text-align:left;font-size:13px;color:var(--text-secondary);">${r.count} 👥</span>
+    `;
+    container.appendChild(item);
+  });
+
+  if (stats.roomStats.length === 0) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">لا يوجد مستخدمون متصلون الآن</div>';
+  }
+
+  // Stats page
+  const peakRoom = stats.roomStats.reduce((a, b) => a.count > b.count ? a : b, { room: '-', count: 0 });
+  document.getElementById('statPeak').textContent = peakRoom.room;
+  document.getElementById('statTotal').textContent = stats.totalRooms;
+
+  // Stats room details
+  const statsRooms = document.getElementById('statsRoomDetails');
+  statsRooms.innerHTML = '';
+  stats.roomStats.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'room-bar-item';
+    div.innerHTML = `
+      <span style="min-width:100px;font-weight:700;">${escapeHtml(r.room)}</span>
+      <span class="badge badge-primary">${r.count} متصل</span>
+    `;
+    statsRooms.appendChild(div);
+  });
+}
+
+async function loadRoomsTable() {
+  try {
+    const res = await fetch('/api/rooms');
+    const data = await res.json();
+    const tbody = document.getElementById('roomsTableBody');
+    tbody.innerHTML = '';
+    (data.rooms || []).forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(r.name)}</strong></td>
+        <td><span class="badge ${r.type === 'public' ? 'badge-success' : 'badge-primary'}">${r.type === 'public' ? '🌐 عامة' : '🔒 خاصة'}</span></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="online-dot" style="width:8px;height:8px;"></div>
+            ${r.online || 0}
+          </div>
+        </td>
+        <td style="color:var(--text-muted);font-size:13px;">${escapeHtml(r.description || '-')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {}
+}
+
+function refreshStats() {
+  loadStats();
+  showToast('تم التحديث', 'success');
+}
+
+function showPage(page, el) {
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  el.classList.add('active');
+
+  const titles = {
+    dashboard: '📊 لوحة التحكم',
+    rooms: '🏠 إدارة الغرف',
+    stats: '📈 الإحصائيات'
+  };
+  document.getElementById('pageTitle').textContent = titles[page];
+
+  if (page === 'rooms') loadRoomsTable();
+}
+
+function showToast(msg, type = 'info') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  t.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+
+// Auto-refresh every 30s
+setInterval(() => {
+  if (adminPass && document.getElementById('adminLayout').style.display !== 'none') {
+    loadStats();
+  }
+}, 30000);
+</script>
+</body>
+</html>
