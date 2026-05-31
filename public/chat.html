@@ -692,12 +692,8 @@ async function startSpeakerMic(){
   
   startSD(username, localStream, true);
   
-  // Connect to all listeners
-  chatUsers.forEach(u => {
-    if (u.username !== username) {
-      getPC(u.username);
-    }
-  });
+  // Notify server we are ready so it can broadcast to listeners
+  socket.emit('speaker_ready');
   
   renderUsers(chatUsers);
 }
