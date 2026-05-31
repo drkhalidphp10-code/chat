@@ -2,626 +2,683 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="نظام دردشة عربي فوري - تواصل مع أصدقائك في غرف دردشة مخصصة">
-  <title>شات عربي - دردشة فورية</title>
-
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>لقانا - دليل الغرف الصوتية</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
   <style>
-    /* Landing Page Styles */
-    .landing-wrapper {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 20px;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Tajawal', sans-serif;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .landing-container {
-      width: 100%;
-      max-width: 900px;
+    body {
+      background-color: #efefef;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
-    /* Header */
-    .app-header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-
-    .app-logo {
-      width: 80px;
-      height: 80px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-      border-radius: 24px;
+    /* =========== TOP BAR HEADER =========== */
+    .top-hdr {
+      height: 58px;
+      background: #eaeaea;
+      border-bottom: 2px solid #ccc;
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 38px;
-      margin: 0 auto 20px;
-      box-shadow: 0 0 40px var(--primary-glow), 0 0 80px rgba(6, 182, 212, 0.15);
-      animation: logo-glow 3s ease-in-out infinite alternate;
+      justify-content: space-between;
+      padding: 0 12px;
+      flex-shrink: 0;
     }
 
-    @keyframes logo-glow {
-      from { box-shadow: 0 0 30px var(--primary-glow), 0 0 60px rgba(6, 182, 212, 0.1); }
-      to   { box-shadow: 0 0 50px var(--primary-glow), 0 0 100px rgba(6, 182, 212, 0.2); }
+    .logo-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
     }
 
-    .app-title {
-      font-size: 2.8rem;
+    .logo-text {
+      font-size: 22px;
       font-weight: 900;
-      background: linear-gradient(135deg, #e0d7ff 0%, var(--accent-light) 60%, #c084fc 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 10px;
+      color: #d2325c;
+      letter-spacing: -0.5px;
+      line-height: 1.1;
     }
 
-    .app-subtitle {
-      font-size: 1.05rem;
-      color: var(--text-secondary);
-    }
-
-    /* Main Grid */
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1fr 1.4fr;
-      gap: 24px;
-      align-items: start;
-    }
-
-    @media (max-width: 750px) {
-      .main-grid { grid-template-columns: 1fr; }
-      .app-title { font-size: 2rem; }
-    }
-
-    /* Login Panel */
-    .login-panel {
-      padding: 32px;
-    }
-
-    .panel-title {
-      font-size: 1.2rem;
+    .logo-sub {
+      font-size: 9px;
       font-weight: 700;
-      color: var(--text-accent);
-      margin-bottom: 24px;
+      color: #555;
+      letter-spacing: 0.5px;
+    }
+
+    .hdr-icons {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
-    .panel-title-icon {
+    .hdr-btn {
       width: 36px;
       height: 36px;
-      background: rgba(124, 58, 237, 0.2);
-      border-radius: var(--radius-sm);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #f5f5f5;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 18px;
-    }
-
-    /* Room Grid */
-    .rooms-panel {
-      padding: 28px;
-    }
-
-    .rooms-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .room-card {
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 16px;
       cursor: pointer;
-      transition: var(--transition);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 2px rgba(0,0,0,0.1);
+      transition: background 0.1s;
+    }
+    .hdr-btn:active {
+      background: #e0e0e0;
+    }
+    .hdr-btn.active {
+      background: #d2325c;
+      color: #fff;
+      border-color: #d2325c;
+    }
+
+    /* =========== MAIN CONTAINER =========== */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
       position: relative;
-      overflow: hidden;
+      background: #fff;
     }
 
-    .room-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, var(--primary-glow), transparent);
-      opacity: 0;
-      transition: var(--transition);
-    }
-
-    .room-card:hover::before { opacity: 1; }
-    .room-card:hover {
-      border-color: var(--primary);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px var(--primary-glow);
-    }
-
-    .room-card.selected {
-      border-color: var(--primary);
-      background: rgba(124, 58, 237, 0.1);
-      box-shadow: 0 0 20px var(--primary-glow);
-    }
-
-    .room-card.selected::before { opacity: 0.5; }
-
-    .room-emoji {
-      font-size: 28px;
-      margin-bottom: 8px;
-      display: block;
-    }
-
-    .room-name {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 4px;
-    }
-
-    .room-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
-
-    .room-online {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      color: var(--success);
-      font-weight: 600;
-    }
-
-    .room-online-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--success);
-      animation: pulse-dot 2s infinite;
-    }
-
-    /* Create Room Button */
-    .create-room-btn {
-      background: var(--bg-dark);
-      border: 2px dashed var(--border);
-      border-radius: var(--radius-lg);
-      padding: 16px;
-      cursor: pointer;
-      transition: var(--transition);
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 14px;
-      font-family: 'Tajawal', sans-serif;
-    }
-
-    .create-room-btn:hover {
-      border-color: var(--primary);
-      color: var(--text-accent);
-      background: rgba(124, 58, 237, 0.05);
-    }
-
-    /* Features Bar */
-    .features-bar {
+    /* =========== CATEGORY / LIST ITEM STYLE =========== */
+    .list-item {
       display: flex;
-      justify-content: center;
-      gap: 30px;
-      margin-top: 40px;
-      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e2e2;
+      cursor: pointer;
+      background: #fff;
+      transition: background 0.15s;
+    }
+    .list-item:active {
+      background: #f7f7f7;
     }
 
-    .feature-item {
+    .item-info {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      color: var(--text-muted);
-      font-size: 13px;
+      gap: 3px;
     }
 
-    .feature-icon {
-      font-size: 24px;
-      opacity: 0.8;
+    .item-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #111;
     }
 
-    /* Divider */
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 20px 0;
-      color: var(--text-muted);
-      font-size: 13px;
-    }
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
+    .item-desc {
+      font-size: 12px;
+      color: #777;
+      font-weight: 500;
     }
 
-    /* Loading state */
-    .btn-loading {
-      position: relative;
-      pointer-events: none;
-      opacity: 0.8;
-    }
-    .btn-loading::after {
-      content: '';
-      position: absolute;
-      width: 18px;
-      height: 18px;
-      border: 2px solid white;
-      border-top-color: transparent;
+    .item-badge {
+      font-size: 32px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Username display */
-    .username-preview {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      background: rgba(124, 58, 237, 0.1);
-      border: 1px solid rgba(124, 58, 237, 0.2);
-      border-radius: var(--radius-md);
-      margin-top: 8px;
-      opacity: 0;
-      transition: var(--transition);
-    }
-    .username-preview.visible { opacity: 1; }
-    .user-avatar-preview {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      background: #f5f5f5;
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      border: 1px solid #ddd;
+    }
+    .item-badge.star {
+      background: #fdf6e2;
+      color: #e09610;
+      border-color: #f7e3af;
+    }
+
+    /* =========== ROOMS CONTAINER =========== */
+    .rooms-list {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+    }
+    .rooms-list.active {
+      display: flex;
+    }
+
+    .back-btn-bar {
+      height: 40px;
+      background: #f1f1f1;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 14px;
       font-weight: 800;
-      font-size: 16px;
-      color: white;
+      color: #d2325c;
+      cursor: pointer;
+      gap: 6px;
+    }
+
+    .room-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+    }
+    .room-row:active {
+      background: #fafafa;
+    }
+
+    .room-title-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .room-star {
+      color: #e09610;
+      font-size: 18px;
+    }
+
+    .room-name-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: #222;
+    }
+
+    .room-stats {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .room-count {
+      font-size: 13px;
+      font-weight: bold;
+      color: #555;
+    }
+
+    /* =========== BOTTOM STATS BAR =========== */
+    .bottom-bar {
+      height: 48px;
+      background: #dbdbdb;
+      border-top: 2px solid #bbb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      color: #333;
+      font-size: 14px;
+      font-weight: bold;
       flex-shrink: 0;
+    }
+    .bottom-bar-icon {
+      font-size: 18px;
+      color: #666;
+    }
+
+    /* =========== DIALOG POPUP =========== */
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .dialog-overlay.active {
+      display: flex;
+    }
+
+    .dialog-box {
+      width: 100%;
+      max-width: 400px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      animation: zoom-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
+    }
+    @keyframes zoom-in {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .dialog-tabs {
+      display: flex;
+      background: #d2325c;
+      height: 44px;
+    }
+
+    .dialog-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .dialog-tab.active {
+      color: #fff;
+      border-bottom-color: #fff;
+      background: rgba(255,255,255,0.15);
+    }
+
+    .dialog-body {
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fdfdfd;
+      padding: 0 10px;
+      height: 46px;
+    }
+
+    .input-icon {
+      font-size: 18px;
+      color: #888;
+      margin-left: 8px;
+    }
+
+    .dialog-input {
+      flex: 1;
+      height: 100%;
+      border: none;
+      outline: none;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: right;
+      background: transparent;
+      color: #111;
+    }
+
+    .input-arrow {
+      color: #d2325c;
+      font-size: 14px;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+
+    .dialog-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      gap: 10px;
+    }
+
+    .save-icon-btn {
+      width: 44px;
+      height: 42px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #f9f9f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .footer-btns {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .dialog-btn {
+      flex: 1;
+      height: 42px;
+      border-radius: 8px;
+      border: none;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.1s;
+    }
+    .dialog-btn:active {
+      opacity: 0.85;
+    }
+
+    .dialog-btn.cancel {
+      background: #eaeaea;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+
+    .dialog-btn.enter {
+      background: #d2325c;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(210,50,92,0.3);
     }
   </style>
 </head>
 <body>
-  <!-- Animated Background -->
-  <div class="bg-animated"></div>
 
-  <!-- Toast Container -->
-  <div class="toast-container" id="toastContainer"></div>
-
-  <div class="landing-wrapper">
-    <div class="landing-container">
-
-      <!-- Header -->
-      <div class="app-header">
-        <div class="app-logo">💬</div>
-        <h1 class="app-title">شات عربي</h1>
-        <p class="app-subtitle">تواصل فوري مع الجميع في غرف دردشة مخصصة</p>
-      </div>
-
-      <!-- Main Grid -->
-      <div class="main-grid">
-
-        <!-- Left: Login Panel -->
-        <div class="glass-card login-panel">
-          <div class="panel-title">
-            <div class="panel-title-icon">👤</div>
-            ادخل إلى الدردشة
-          </div>
-
-          <form id="loginForm" autocomplete="off">
-            <div class="flex flex-col gap-4">
-
-              <!-- Username -->
-              <div class="form-group">
-                <label class="form-label" for="username">اسمك في الدردشة</label>
-                <input
-                  type="text"
-                  id="username"
-                  class="form-input"
-                  placeholder="أدخل اسمك..."
-                  maxlength="30"
-                  autocomplete="off"
-                >
-                <div class="username-preview" id="usernamePreview">
-                  <div class="user-avatar-preview" id="avatarPreview">؟</div>
-                  <span id="previewText" style="font-size:14px;color:var(--text-secondary);">معاينة اسمك</span>
-                </div>
-              </div>
-
-              <!-- Selected Room Display -->
-              <div class="form-group">
-                <label class="form-label">الغرفة المختارة</label>
-                <input
-                  type="text"
-                  id="selectedRoomDisplay"
-                  class="form-input"
-                  placeholder="اختر غرفة من القائمة ←"
-                  readonly
-                  style="cursor:pointer"
-                >
-                <input type="hidden" id="selectedRoom" value="">
-              </div>
-
-              <!-- Enter Button -->
-              <button type="submit" class="btn btn-primary w-full" id="enterBtn" style="margin-top:4px;font-size:16px;padding:16px;">
-                <span>🚀</span> دخول الدردشة
-              </button>
-
-            </div>
-          </form>
-
-          <div class="divider">أو</div>
-
-          <button class="btn btn-ghost w-full" id="createRoomToggle">
-            <span>✨</span> إنشاء غرفة جديدة
-          </button>
-
-          <!-- Create Room Form (hidden by default) -->
-          <div id="createRoomForm" class="hidden" style="margin-top:16px;">
-            <div class="flex flex-col gap-3">
-              <div class="form-group">
-                <label class="form-label" for="newRoomName">اسم الغرفة</label>
-                <input type="text" id="newRoomName" class="form-input" placeholder="اسم الغرفة..." maxlength="50">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="newRoomDesc">وصف الغرفة (اختياري)</label>
-                <input type="text" id="newRoomDesc" class="form-input" placeholder="وصف الغرفة..." maxlength="100">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="newRoomType">نوع الغرفة</label>
-                <select id="newRoomType" class="form-input">
-                  <option value="public">🌐 عامة - للجميع</option>
-                  <option value="private">🔒 خاصة - بكلمة مرور</option>
-                </select>
-              </div>
-              <button class="btn btn-accent w-full" id="createRoomBtn">
-                <span>✨</span> إنشاء الغرفة
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Rooms Panel -->
-        <div class="glass-card rooms-panel">
-          <div class="panel-title">
-            <div class="panel-title-icon">🏠</div>
-            غرف الدردشة المتاحة
-          </div>
-
-          <div class="rooms-grid" id="roomsGrid">
-            <!-- Rooms loaded dynamically -->
-            <div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);">
-              <div style="font-size:2rem;margin-bottom:10px;animation:spin 1s linear infinite;display:inline-block">⟳</div>
-              <div>جاري تحميل الغرف...</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Features Bar -->
-      <div class="features-bar">
-        <div class="feature-item">
-          <span class="feature-icon">⚡</span>
-          <span>رسائل فورية</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-icon">🏠</span>
-          <span>غرف متعددة</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-icon">😊</span>
-          <span>إيموجي</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-icon">👑</span>
-          <span>إدارة الغرف</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-icon">📱</span>
-          <span>متوافق مع الهاتف</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-icon">🔒</span>
-          <span>غرف خاصة</span>
-        </div>
-      </div>
-
+  <!-- =========== TOP BAR HEADER =========== -->
+  <header class="top-hdr">
+    <div class="logo-container">
+      <span class="logo-text">لقانا</span>
+      <span class="logo-sub">AUDIO AND VIDEO CHAT ROOMS</span>
     </div>
-  </div>
+    <div class="hdr-icons">
+      <div class="hdr-btn" title="الخريطة">📍</div>
+      <div class="hdr-btn active" title="القائمة">🎛️</div>
+      <div class="hdr-btn" title="المفضلة">⭐</div>
+      <div class="hdr-btn" title="القائمة">☰</div>
+    </div>
+  </header>
 
-  <!-- Create Room Modal -->
-  <div class="modal-overlay" id="createRoomModal">
-    <div class="modal">
-      <h2 style="font-size:1.3rem;margin-bottom:20px;color:var(--text-accent);">✨ إنشاء غرفة جديدة</h2>
-      <div class="flex flex-col gap-4">
-        <div class="form-group">
-          <label class="form-label">اسم الغرفة</label>
-          <input type="text" id="modalRoomName" class="form-input" placeholder="اسم الغرفة...">
+  <!-- =========== MAIN CONTENT AREA =========== -->
+  <main class="main-content">
+    
+    <!-- CATEGORIES VIEW -->
+    <div id="categoriesView">
+      <!-- filled by JS -->
+    </div>
+
+    <!-- ROOMS VIEW -->
+    <div id="roomsView" class="rooms-list">
+      <div class="back-btn-bar" onclick="showCategories()">
+        <span>↩</span> <span id="backBarTitle">العودة للدليل</span>
+      </div>
+      <div id="roomsListContent">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- =========== BOTTOM STATS BAR =========== -->
+  <footer class="bottom-bar">
+    <span class="bottom-bar-icon">👥</span>
+    <span id="totalOnlineStats">جاري الحساب...</span>
+  </footer>
+
+  <!-- =========== JOIN DIALOG POPUP =========== -->
+  <div class="dialog-overlay" id="dialogOverlay" onclick="closeJoinDialog(event)">
+    <div class="dialog-box" onclick="event.stopPropagation()">
+      <div class="dialog-tabs">
+        <div class="dialog-tab active" onclick="setTab('visitor')">زائر</div>
+        <div class="dialog-tab" onclick="setTab('member')">عضو</div>
+        <div class="dialog-tab" onclick="setTab('registered')">مسجل</div>
+      </div>
+      <div class="dialog-body">
+        
+        <!-- Name Input -->
+        <div class="input-wrapper">
+          <span class="input-icon">👤</span>
+          <input type="text" class="dialog-input" id="joinName" placeholder="أدخل اسمك هنا..." maxlength="30" value="LGANA">
+          <span class="input-arrow">▼</span>
         </div>
-        <div class="flex gap-2">
-          <button class="btn btn-ghost" id="cancelModal" style="flex:1">إلغاء</button>
-          <button class="btn btn-primary" id="confirmCreateRoom" style="flex:1">إنشاء</button>
+
+        <!-- Password Input (hidden for Visitor, shown for Member/Registered) -->
+        <div class="input-wrapper" id="passwordWrapper" style="display: none;">
+          <span class="input-icon">🔑</span>
+          <input type="password" class="dialog-input" id="joinPassword" placeholder="أدخل كلمة المرور...">
         </div>
+
+        <!-- Footer Actions -->
+        <div class="dialog-footer">
+          <button class="save-icon-btn" title="حفظ الاسم">💾</button>
+          <div class="footer-btns">
+            <button class="dialog-btn cancel" onclick="closeJoinDialog()">إلغاء</button>
+            <button class="dialog-btn enter" onclick="submitJoin()">دخول</button>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 
   <script>
-    // Room emojis mapping
-    const roomEmojis = {
-      'عام': '💬', 'تقنية': '💻', 'ترفيه': '🎭', 'رياضة': '⚽',
-      'موسيقى': '🎵', 'ألعاب': '🎮', 'علوم': '🔬', 'سياسة': '🏛️',
-      'default': '🏠'
-    };
+    // Categories/Countries definition
+    const categories = [
+      { id: 'featured', name: 'الغرف المميزة', icon: '⭐', isStar: true },
+      { id: 'iraq', name: 'العراق', icon: '🇮🇶' },
+      { id: 'saudi', name: 'السعودية', icon: '🇸🇦' },
+      { id: 'egypt', name: 'مصر', icon: '🇪🇬' },
+      { id: 'jordan', name: 'الأردن', icon: '🇯🇴' },
+      { id: 'syria', name: 'سوريا', icon: '🇸🇾' },
+      { id: 'oman', name: 'عمان', icon: '🇴🇲' },
+      { id: 'yemen', name: 'اليمن', icon: '🇾🇪' },
+      { id: 'lebanon', name: 'لبنان', icon: '🇱🇧' },
+      { id: 'morocco', name: 'المغرب', icon: '🇲🇦' }
+    ];
 
-    let selectedRoom = '';
-    let rooms = [];
+    let allRooms = [];
+    let selectedRoom = null;
+    let activeTab = 'visitor';
 
-    // --- Load rooms ---
+    // Fetch rooms from backend
     async function loadRooms() {
       try {
         const res = await fetch('/api/rooms');
         const data = await res.json();
-        rooms = data.rooms || [];
-        renderRooms(rooms);
+        allRooms = data.rooms || [];
+        renderCategories();
+        updateBottomStats();
       } catch (e) {
-        document.getElementById('roomsGrid').innerHTML = `
-          <div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);">
-            <div style="font-size:2rem;margin-bottom:10px;">❌</div>
-            <div>تعذر تحميل الغرف</div>
-            <button class="btn btn-ghost btn-sm" onclick="loadRooms()" style="margin-top:10px">إعادة المحاولة</button>
-          </div>
-        `;
+        console.error("Error loading rooms", e);
       }
     }
 
-    function renderRooms(rooms) {
-      const grid = document.getElementById('roomsGrid');
-      grid.innerHTML = '';
-      rooms.forEach(room => {
-        const emoji = roomEmojis[room.name] || roomEmojis['default'];
-        const card = document.createElement('div');
-        card.className = 'room-card';
-        card.dataset.name = room.name;
-        card.innerHTML = `
-          <span class="room-emoji">${emoji}</span>
-          <div class="room-name">${escapeHtml(room.name)}</div>
-          <div class="room-desc">${escapeHtml(room.description || '')}</div>
-          <div class="room-online">
-            <div class="room-online-dot"></div>
-            ${room.online || 0} متصل
-          </div>
-        `;
-        card.addEventListener('click', () => selectRoom(room.name));
-        grid.appendChild(card);
-      });
+    // Distribute rooms to countries dynamically based on room name hash
+    function getRoomsForCategory(catId) {
+      if (catId === 'featured') return allRooms; // featured shows all rooms
 
-      // Add create room card
-      const createCard = document.createElement('button');
-      createCard.className = 'create-room-btn';
-      createCard.innerHTML = `<div style="font-size:24px;margin-bottom:6px">➕</div>غرفة جديدة`;
-      createCard.onclick = () => document.getElementById('createRoomToggle').click();
-      grid.appendChild(createCard);
-    }
-
-    function selectRoom(name) {
-      selectedRoom = name;
-      document.getElementById('selectedRoom').value = name;
-      document.getElementById('selectedRoomDisplay').value = name;
-
-      document.querySelectorAll('.room-card').forEach(c => c.classList.remove('selected'));
-      document.querySelector(`.room-card[data-name="${name}"]`)?.classList.add('selected');
-    }
-
-    // --- Username preview ---
-    const usernameInput = document.getElementById('username');
-    const usernamePreview = document.getElementById('usernamePreview');
-    const avatarPreview = document.getElementById('avatarPreview');
-    const previewText = document.getElementById('previewText');
-
-    const colors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63','#ff5722','#00bcd4'];
-    function getColor(name) {
-      let h = 0;
-      for (let c of name) h = c.charCodeAt(0) + ((h << 5) - h);
-      return colors[Math.abs(h) % colors.length];
-    }
-
-    usernameInput.addEventListener('input', () => {
-      const val = usernameInput.value.trim();
-      if (val.length >= 2) {
-        const color = getColor(val);
-        avatarPreview.style.background = color;
-        avatarPreview.textContent = val[0];
-        previewText.textContent = val;
-        usernamePreview.classList.add('visible');
-      } else {
-        usernamePreview.classList.remove('visible');
-      }
-    });
-
-    // --- Toggle create room form ---
-    document.getElementById('createRoomToggle').addEventListener('click', () => {
-      const form = document.getElementById('createRoomForm');
-      form.classList.toggle('hidden');
-    });
-
-    // --- Create Room ---
-    document.getElementById('createRoomBtn').addEventListener('click', createRoom);
-
-    async function createRoom() {
-      const username = document.getElementById('username').value.trim();
-      const name = document.getElementById('newRoomName').value.trim();
-      const desc = document.getElementById('newRoomDesc').value.trim();
-      const type = document.getElementById('newRoomType').value;
-
-      if (!username) { showToast('أدخل اسمك أولاً', 'error'); return; }
-      if (!name) { showToast('أدخل اسم الغرفة', 'error'); return; }
-
-      try {
-        const res = await fetch('/api/rooms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, description: desc, type, username })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast('تم إنشاء الغرفة بنجاح!', 'success');
-          await loadRooms();
-          selectRoom(name);
-          document.getElementById('createRoomForm').classList.add('hidden');
-        } else {
-          showToast(data.error || 'حدث خطأ', 'error');
+      // Group rooms by category
+      return allRooms.filter(room => {
+        const name = room.name.toLowerCase();
+        
+        // Match country keywords
+        if (catId === 'iraq' && (name.includes('عراق') || name.includes('iraq'))) return true;
+        if (catId === 'saudi' && (name.includes('سعود') || name.includes('saudi'))) return true;
+        if (catId === 'egypt' && (name.includes('مصر') || name.includes('egypt'))) return true;
+        if (catId === 'jordan' && (name.includes('اردن') || name.includes('jordan'))) return true;
+        if (catId === 'syria' && (name.includes('سوريا') || name.includes('syria'))) return true;
+        
+        // Dynamic fallback fallback to distribute rooms
+        let hash = 0;
+        for (let i = 0; i < room.name.length; i++) {
+          hash = room.name.charCodeAt(i) + ((hash << 5) - hash);
         }
-      } catch (e) {
-        showToast('خطأ في الاتصال', 'error');
+        const index = Math.abs(hash) % (categories.length - 1);
+        return categories[index + 1].id === catId;
+      });
+    }
+
+    // Render category list
+    function renderCategories() {
+      const container = document.getElementById('categoriesView');
+      container.innerHTML = '';
+
+      categories.forEach(cat => {
+        const catRooms = getRoomsForCategory(cat.id);
+        const usersCount = catRooms.reduce((sum, r) => sum + (r.online || 0), 0);
+        
+        // Format stats subtext
+        const statsSub = `${usersCount} مستخدم  ${catRooms.length} غرفة`;
+
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.onclick = () => showRooms(cat.id, cat.name);
+        row.innerHTML = `
+          <div class="item-info">
+            <span class="item-title">${cat.name}</span>
+            <span class="item-desc">${statsSub}</span>
+          </div>
+          <div class="item-badge ${cat.isStar ? 'star' : ''}">${cat.icon}</div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    // Show rooms under a specific country
+    function showRooms(catId, catName) {
+      document.getElementById('categoriesView').style.display = 'none';
+      const roomsView = document.getElementById('roomsView');
+      roomsView.classList.add('active');
+      
+      document.getElementById('backBarTitle').textContent = `العودة للدليل - ${catName}`;
+      
+      const content = document.getElementById('roomsListContent');
+      content.innerHTML = '';
+
+      const catRooms = getRoomsForCategory(catId);
+      if (catRooms.length === 0) {
+        content.innerHTML = '<div style="padding:40px; text-align:center; color:#999; font-size:14px">لا توجد غرف متاحة في هذه الفئة حالياً.</div>';
+        return;
+      }
+
+      catRooms.forEach(room => {
+        const row = document.createElement('div');
+        row.className = 'room-row';
+        row.onclick = () => openJoinDialog(room);
+        row.innerHTML = `
+          <div class="room-title-section">
+            <span class="room-star">★</span>
+            <span class="room-name-text">${escapeHtml(room.name)}</span>
+          </div>
+          <div class="room-stats">
+            <span class="room-count">${room.online || 0}</span>
+          </div>
+        `;
+        content.appendChild(row);
+      });
+    }
+
+    // Go back to category directory
+    function showCategories() {
+      document.getElementById('roomsView').classList.remove('active');
+      document.getElementById('categoriesView').style.display = 'block';
+    }
+
+    // Update bottom status bar statistics
+    function updateBottomStats() {
+      const totalUsers = allRooms.reduce((sum, r) => sum + (r.online || 0), 0);
+      document.getElementById('totalOnlineStats').textContent = `${totalUsers} مستخدم  ${allRooms.length} غرفة`;
+    }
+
+    // Join Dialog handlers
+    function openJoinDialog(room) {
+      selectedRoom = room;
+      document.getElementById('dialogOverlay').classList.add('active');
+      
+      // Auto-focus input and set random guest name if default
+      const input = document.getElementById('joinName');
+      if (input.value === 'LGANA') {
+        input.value = 'زائر_' + Math.floor(100 + Math.random() * 900);
+      }
+      input.focus();
+    }
+
+    function closeJoinDialog(e) {
+      document.getElementById('dialogOverlay').classList.remove('active');
+    }
+
+    // Switch between tabs in dialog popup
+    function setTab(tab) {
+      activeTab = tab;
+      
+      // Update tab styles
+      const tabs = document.querySelectorAll('.dialog-tab');
+      tabs.forEach(t => t.classList.remove('active'));
+      
+      // Find tab by text content or index
+      if (tab === 'visitor') tabs[0].classList.add('active');
+      if (tab === 'member') tabs[1].classList.add('active');
+      if (tab === 'registered') tabs[2].classList.add('active');
+
+      // Show/hide password field
+      const pwdWrapper = document.getElementById('passwordWrapper');
+      if (tab === 'visitor') {
+        pwdWrapper.style.display = 'none';
+      } else {
+        pwdWrapper.style.display = 'flex';
       }
     }
 
-    // --- Enter Chat ---
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const username = document.getElementById('username').value.trim();
-      const room = document.getElementById('selectedRoom').value;
+    // Submit dialog and enter chat room
+    function submitJoin() {
+      const nameInput = document.getElementById('joinName');
+      let name = nameInput.value.trim();
+      
+      if (!name) {
+        alert('يرجى إدخال الاسم للمتابعة');
+        return;
+      }
 
-      if (!username) { showToast('أدخل اسمك للمتابعة', 'error'); return; }
-      if (username.length < 2) { showToast('الاسم يجب أن يكون حرفين على الأقل', 'error'); return; }
-      if (!room) { showToast('اختر غرفة للدخول', 'error'); return; }
+      const isLoggingAsAdmin = name.toLowerCase() === 'admin';
+      const password = document.getElementById('joinPassword').value.trim();
 
-      const btn = document.getElementById('enterBtn');
-      btn.classList.add('btn-loading');
-      btn.querySelector('span').style.display = 'none';
+      if (isLoggingAsAdmin) {
+        if (!password) {
+          // If they typed admin but password field is hidden, show it and request password
+          setTab('registered'); // auto-switch to show password field
+          alert('حساب المسؤول يتطلب كلمة مرور. يرجى إدخالها.');
+          return;
+        }
+        if (password !== 'admin123') {
+          alert('كلمة المرور غير صحيحة لحساب المسؤول!');
+          return;
+        }
+      }
 
-      // Store in session
-      sessionStorage.setItem('chatUsername', username);
-      sessionStorage.setItem('chatRoom', room);
-      sessionStorage.setItem('chatColor', getColor(username));
+      if (activeTab === 'member' || activeTab === 'registered') {
+        if (!isLoggingAsAdmin && !password) {
+          alert('يرجى إدخال كلمة المرور');
+          return;
+        }
+        // Member/Registered name prefixes for visual distinctiveness
+        if (!isLoggingAsAdmin) {
+          name = `[${activeTab === 'member' ? 'عضو' : 'مسجل'}] ` + name;
+        }
+      }
 
-      setTimeout(() => {
-        window.location.href = '/chat';
-      }, 500);
-    });
+      // Store credentials and redirect
+      sessionStorage.setItem('chatUsername', name);
+      sessionStorage.setItem('chatRoom', selectedRoom.name);
+      
+      // Set distinct colors based on tab type
+      let userColor = '#e53935'; // default red
+      if (isLoggingAsAdmin) userColor = '#bf360c'; // distinct red/orange for super admin
+      else if (activeTab === 'member') userColor = '#1565c0'; // blue for members
+      else if (activeTab === 'registered') userColor = '#2e7d32'; // green for registered
+      sessionStorage.setItem('chatColor', userColor);
+      
+      // Save password in sessionStorage so server can verify it on join_room
+      sessionStorage.setItem('chatPassword', password);
 
-    // --- Toast ---
-    function showToast(msg, type = 'info') {
-      const c = document.getElementById('toastContainer');
-      const t = document.createElement('div');
-      t.className = `toast toast-${type}`;
-      const icons = { success: '✅', error: '❌', info: 'ℹ️' };
-      t.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
-      c.appendChild(t);
-      setTimeout(() => t.remove(), 3000);
+      window.location.href = '/chat';
     }
 
     function escapeHtml(str) {
@@ -630,9 +687,9 @@
       return d.innerHTML;
     }
 
-    // Load rooms on start
+    // Initialize page
     loadRooms();
-    // Refresh every 15s
+    // Refresh rooms every 15 seconds
     setInterval(loadRooms, 15000);
   </script>
 </body>

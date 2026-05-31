@@ -154,6 +154,7 @@ const onlineUsers = new Map(); // socketId -> { username, room, color, id }
 const roomUsers = new Map();   // roomName -> Set of socketIds
 const micQueues = new Map();    // roomName -> Array of { socketId, username, color }
 const activeSpeakers = new Map(); // roomName -> { socketId, username, color, expiresAt, timer }
+const micLockedRooms = new Set();  // Set of roomNames with locked mic queues
 
 // ============================================
 // Helper: Get Color from Username
@@ -309,12 +310,19 @@ io.on('connection', (socket) => {
   // -----------------------------------------------
   // JOIN ROOM
   // -----------------------------------------------
-  socket.on('join_room', async ({ username, room, color }) => {
+  socket.on('join_room', async ({ username, room, color, password }) => {
     if (!username || !room) return;
 
     const cleanUser = username.trim().substring(0, 30);
     const cleanRoom = room.trim().substring(0, 50);
     const userColor = color || getUserColor(cleanUser);
+
+    // Admin password security check
+    if (cleanUser.toLowerCase() === 'admin' && password !== (process.env.ADMIN_PASSWORD || 'admin123')) {
+      socket.emit('error_msg', { message: 'كلمة مرور حساب المسؤول غير صحيحة!' });
+      setTimeout(() => socket.disconnect(), 800);
+      return;
+    }
 
     // Check if banned
     if (db) {
@@ -369,6 +377,7 @@ io.on('connection', (socket) => {
 
     const activeSpk = activeSpeakers.get(cleanRoom);
     const qList = micQueues.get(cleanRoom) || [];
+    const isAdmin = await checkIsAdmin(cleanUser, cleanRoom);
 
     socket.emit('joined_room', {
       room: cleanRoom,
@@ -376,6 +385,8 @@ io.on('connection', (socket) => {
       color: userColor,
       users: usersInRoom,
       time: formatTime(),
+      isAdmin: isAdmin,
+      isMicLocked: micLockedRooms.has(cleanRoom),
       speaker: activeSpk ? {
         username: activeSpk.username,
         color: activeSpk.color,
@@ -641,7 +652,7 @@ io.on('connection', (socket) => {
   // VOICE / MIC QUEUE EVENTS
   // -----------------------------------------------
 
-  socket.on('request_mic', () => {
+  socket.on('request_mic', async () => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
 
@@ -649,24 +660,25 @@ io.on('connection', (socket) => {
     if (!micQueues.has(roomName)) micQueues.set(roomName, []);
     const queue = micQueues.get(roomName);
 
+    // Enforce mic queue lock check
+    const isAdmin = await checkIsAdmin(user.username, roomName);
+    if (micLockedRooms.has(roomName) && !isAdmin) {
+      socket.emit('error_msg', { message: 'المايك مقفل حالياً بواسطة إدارة الغرفة!' });
+      return;
+    }
+
     const speaker = activeSpeakers.get(roomName);
     if (!speaker) {
       // Direct promotion
-      const expiresAt = Date.now() + 180000;
       activeSpeakers.set(roomName, {
         socketId: socket.id,
         username: user.username,
         color: user.color,
-        expiresAt: expiresAt
+        ready: false
       });
 
       socket.emit('mic_assigned');
-      io.to(roomName).emit('speaker_changed', {
-        username: user.username,
-        color: user.color,
-        timeLeft: 180
-      });
-      startSpeakerTimer(roomName);
+      startSpeakerSetupTimeout(roomName);
     } else {
       // Add to queue if not already there and not the speaker
       if (speaker.socketId !== socket.id && !queue.some(q => q.socketId === socket.id)) {
@@ -683,10 +695,69 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('speaker_ready', () => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const roomName = user.room;
+    const speaker = activeSpeakers.get(roomName);
+    if (speaker && speaker.socketId === socket.id && !speaker.ready) {
+      clearTimeout(speaker.setupTimer);
+      speaker.ready = true;
+      speaker.expiresAt = Date.now() + 180000;
+
+      io.to(roomName).emit('speaker_changed', {
+        username: speaker.username,
+        color: speaker.color,
+        timeLeft: 180
+      });
+      startSpeakerTimer(roomName);
+    }
+  });
+
   socket.on('leave_mic', () => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
     leaveMic(socket, user.room);
+  });
+
+  socket.on('lock_mic', async ({ locked }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const isAdmin = await checkIsAdmin(user.username, user.room);
+    if (!isAdmin) return;
+
+    if (locked) {
+      micLockedRooms.add(user.room);
+    } else {
+      micLockedRooms.delete(user.room);
+    }
+
+    io.to(user.room).emit('mic_lock_status', { locked });
+    console.log(`🔒 تم ${locked ? 'قفل' : 'فتح'} المايك في غرفة ${user.room} بواسطة ${user.username}`);
+  });
+
+  socket.on('broadcast_announcement', async ({ text }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const isAdmin = await checkIsAdmin(user.username, user.room);
+    if (!isAdmin) return;
+
+    io.to(user.room).emit('announcement_updated', { text });
+    console.log(`📢 إعلان جديد في غرفة ${user.room} بواسطة ${user.username}: ${text}`);
+  });
+
+  socket.on('drop_speaker', async () => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const isAdmin = await checkIsAdmin(user.username, user.room);
+    if (!isAdmin) return;
+
+    console.log(`🎤 تم سحب المايك في غرفة ${user.room} بواسطة ${user.username}`);
+    demoteSpeaker(user.room);
   });
 
   // WebRTC Signaling for Single-Speaker Star Topology
@@ -788,11 +859,26 @@ function startSpeakerTimer(roomName) {
   }, 180000);
 }
 
+function startSpeakerSetupTimeout(roomName) {
+  const speaker = activeSpeakers.get(roomName);
+  if (!speaker) return;
+
+  clearTimeout(speaker.setupTimer);
+  speaker.setupTimer = setTimeout(() => {
+    const current = activeSpeakers.get(roomName);
+    if (current && current.socketId === speaker.socketId && !current.ready) {
+      console.log(`⚠️ انتهت مهلة إعداد المايك لـ ${speaker.username} في غرفة ${roomName}`);
+      demoteSpeaker(roomName);
+    }
+  }, 12000);
+}
+
 function demoteSpeaker(roomName) {
   const speaker = activeSpeakers.get(roomName);
   if (!speaker) return;
 
   clearTimeout(speaker.timer);
+  clearTimeout(speaker.setupTimer);
   activeSpeakers.delete(roomName);
 
   // Notify the demoted speaker
@@ -802,24 +888,19 @@ function demoteSpeaker(roomName) {
   const queue = micQueues.get(roomName) || [];
   if (queue.length > 0) {
     const nextSpeaker = queue.shift();
-    const expiresAt = Date.now() + 180000;
     activeSpeakers.set(roomName, {
       socketId: nextSpeaker.socketId,
       username: nextSpeaker.username,
       color: nextSpeaker.color,
-      expiresAt: expiresAt
+      ready: false
     });
 
     io.to(nextSpeaker.socketId).emit('mic_assigned');
-    io.to(roomName).emit('speaker_changed', {
-      username: nextSpeaker.username,
-      color: nextSpeaker.color,
-      timeLeft: 180
-    });
     io.to(roomName).emit('queue_updated', {
       queue: queue.map(q => ({ username: q.username, color: q.color }))
     });
-    startSpeakerTimer(roomName);
+    
+    startSpeakerSetupTimeout(roomName);
   } else {
     io.to(roomName).emit('speaker_changed', null);
     io.to(roomName).emit('queue_updated', { queue: [] });
