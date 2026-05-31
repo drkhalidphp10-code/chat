@@ -516,9 +516,7 @@ function renderUsers(users){
     } else if (qIdx !== -1) {
       icon = `✋ ${qIdx + 1}`;
     } else {
-      const icons = ['✋','🤚','✋'];
-      let h = 0; for(let c of u.username) h = c.charCodeAt(0) + ((h<<5)-h);
-      icon = icons[Math.abs(h)%icons.length];
+      icon = '';
     }
 
     const row=document.createElement('div');
