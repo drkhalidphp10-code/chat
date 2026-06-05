@@ -126,6 +126,15 @@ async function createTables() {
       INDEX idx_receiver (receiver),
       INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    `CREATE TABLE IF NOT EXISTS private_blocks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      blocker VARCHAR(50) NOT NULL,
+      blocked VARCHAR(50) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_block (blocker, blocked),
+      INDEX idx_blocker (blocker)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   ];
 
   for (const query of queries) {
@@ -180,6 +189,7 @@ const inMemoryRooms = {
 const inMemoryMessages = {};
 const inMemoryAdmins = {};
 const inMemoryPrivateMessages = [];
+const inMemoryPrivateBlocks = new Set(); // blockerUsername:blockedUsername
 
 // ============================================
 // Online Users Tracking
@@ -759,6 +769,26 @@ io.on('connection', (socket) => {
       queue: qList.map(q => ({ username: q.username, color: q.color }))
     });
 
+    // Fetch blocks
+    let blockedUsers = [];
+    if (db) {
+      try {
+        const [blockRows] = await db.query('SELECT blocked FROM private_blocks WHERE blocker = ?', [cleanUser]);
+        blockedUsers = blockRows.map(r => r.blocked);
+      } catch (e) {
+        console.error('Error fetching blocks:', e);
+      }
+    } else {
+      // In-memory blocks
+      for (const blockStr of inMemoryPrivateBlocks) {
+        const [blocker, blocked] = blockStr.split(':');
+        if (blocker === cleanUser) {
+          blockedUsers.push(blocked);
+        }
+      }
+    }
+    socket.emit('blocked_list', { blocked: blockedUsers });
+
     // Save to DB
     if (db) {
       try {
@@ -1240,6 +1270,27 @@ io.on('connection', (socket) => {
     const cleanMsg = message.trim().substring(0, 1000);
     if (!cleanMsg) return;
 
+    // Check if recipient has blocked sender
+    let isBlocked = false;
+    if (db) {
+      try {
+        const [blockRows] = await db.query(
+          'SELECT id FROM private_blocks WHERE blocker = ? AND blocked = ?',
+          [to, user.username]
+        );
+        isBlocked = blockRows.length > 0;
+      } catch (e) {
+        console.error('Error checking blocks:', e);
+      }
+    } else {
+      isBlocked = inMemoryPrivateBlocks.has(`${to}:${user.username}`);
+    }
+
+    if (isBlocked) {
+      socket.emit('error_msg', { message: 'لا يمكنك إرسال رسائل خاصة لهذا المستخدم بسبب قيود الخصوصية.' });
+      return;
+    }
+
     const targetSocket = findSocketByUsername(to);
     
     // Save to DB if connected
@@ -1322,6 +1373,46 @@ io.on('connection', (socket) => {
       console.error('Error fetching private history:', e);
       socket.emit('private_history', { withUser, messages: [] });
     }
+  });
+
+  socket.on('block_user_private', async ({ targetUsername }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user || !targetUsername) return;
+
+    if (db) {
+      try {
+        await db.query(
+          'INSERT IGNORE INTO private_blocks (blocker, blocked) VALUES (?, ?)',
+          [user.username, targetUsername]
+        );
+      } catch (e) {
+        console.error('Error blocking user:', e);
+      }
+    } else {
+      inMemoryPrivateBlocks.add(`${user.username}:${targetUsername}`);
+    }
+    
+    socket.emit('user_blocked_private', { targetUsername });
+  });
+
+  socket.on('unblock_user_private', async ({ targetUsername }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user || !targetUsername) return;
+
+    if (db) {
+      try {
+        await db.query(
+          'DELETE FROM private_blocks WHERE blocker = ? AND blocked = ?',
+          [user.username, targetUsername]
+        );
+      } catch (e) {
+        console.error('Error unblocking user:', e);
+      }
+    } else {
+      inMemoryPrivateBlocks.delete(`${user.username}:${targetUsername}`);
+    }
+    
+    socket.emit('user_unblocked_private', { targetUsername });
   });
 
 });

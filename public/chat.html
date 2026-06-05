@@ -679,6 +679,18 @@
     .pback-btn:hover {
       background: rgba(255,255,255,0.3);
     }
+    .pclose-btn {
+      color: #999;
+      font-size: 14px;
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .pclose-btn:hover {
+      background: #ffebee;
+      color: #c62828;
+    }
   </style>
 </head>
 <body>
@@ -689,6 +701,8 @@
 <!-- Context Menu -->
 <div class="ctxm" id="ctxm">
   <div class="ctxi" id="ctxPrivate" style="font-weight: bold; color: #1565c0;">💬 مراسلة خاصة</div>
+  <div class="ctxi" id="ctxBlockPrivate" style="color: #c62828;">🔒 حظر الخاص</div>
+  <div class="ctxi" id="ctxUnblockPrivate" style="color: #2e7d32; display: none;">🔓 إلغاء حظر الخاص</div>
   <div class="ctxi" id="ctxKick">🚫 طرد من الغرفة</div>
   <div class="ctxi danger" id="ctxBan">🔨 حظر</div>
   <div class="ctxi" id="ctxAdmin">👑 تعيين مشرف</div>
@@ -1010,6 +1024,7 @@ socket.on('announcement_updated', ({ text }) => {
 let currentChatMode = 'public'; // 'public' or 'private'
 let activePrivateUser = null;   // username of the active private chat partner
 let privateChats = {};          // username -> { messages: [], unreadCount: 0, color: '' }
+let blockedUsersList = [];      // list of blocked usernames
 
 // Tab switching inside users panel
 function switchPanelTab(tab) {
@@ -1055,9 +1070,13 @@ function renderPrivateChatsList() {
       <div class="ua" style="background:${clr}">${u[0]}</div>
       <span class="un" style="color:${clr}; flex: 1;">${esc(u)}</span>
       ${badge}
+      <span class="pclose-btn" title="إغلاق المحادثة">✕</span>
     `;
     row.onclick = () => {
       startPrivateChat(u);
+    };
+    row.querySelector('.pclose-btn').onclick = (e) => {
+      closePrivateChat(u, e);
     };
     container.appendChild(row);
   });
@@ -1124,6 +1143,21 @@ function switchToPublicChat() {
   document.getElementById('msgs').style.display = 'block';
   
   scrollDown();
+}
+
+// Close/delete a private conversation
+function closePrivateChat(u, event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  if (confirm(`هل تريد إغلاق وحذف المحادثة مع ${u}؟`)) {
+    delete privateChats[u];
+    if (currentChatMode === 'private' && activePrivateUser === u) {
+      switchToPublicChat();
+    }
+    updatePrivateBadge();
+    renderPrivateChatsList();
+  }
 }
 
 // Render private messages to DOM
@@ -1231,6 +1265,22 @@ socket.on('private_history', ({ withUser, messages }) => {
   if (currentChatMode === 'private' && activePrivateUser === withUser) {
     renderPrivateMessages();
   }
+});
+
+socket.on('blocked_list', ({ blocked }) => {
+  blockedUsersList = blocked || [];
+});
+
+socket.on('user_blocked_private', ({ targetUsername }) => {
+  if (!blockedUsersList.includes(targetUsername)) {
+    blockedUsersList.push(targetUsername);
+  }
+  toast(`🔒 تم حظر المراسلة الخاصة مع ${targetUsername}`);
+});
+
+socket.on('user_unblocked_private', ({ targetUsername }) => {
+  blockedUsersList = blockedUsersList.filter(u => u !== targetUsername);
+  toast(`🔓 تم إلغاء حظر المراسلة الخاصة مع ${targetUsername}`);
 });
 
 /* ===================================================
@@ -1759,6 +1809,11 @@ function showCtx(e,user){
   document.getElementById('ctxBan').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('ctxAdmin').style.display = isAdmin ? 'flex' : 'none';
   
+  // Show block/unblock items based on current status
+  const isBlocked = blockedUsersList.includes(user);
+  document.getElementById('ctxBlockPrivate').style.display = isBlocked ? 'none' : 'flex';
+  document.getElementById('ctxUnblockPrivate').style.display = isBlocked ? 'flex' : 'none';
+  
   m.style.top=e.clientY+'px';m.style.right=(window.innerWidth-e.clientX)+'px';m.style.left='auto';
   m.classList.add('open');
 }
@@ -1767,6 +1822,16 @@ document.getElementById('ctxKick').onclick=()=>{if(ctxTarget&&confirm(`طرد ${
 document.getElementById('ctxBan').onclick=()=>{if(ctxTarget){const r=prompt('سبب الحظر:');socket.emit('ban_user',{targetUsername:ctxTarget,reason:r||'لا يوجد سبب'})}};
 document.getElementById('ctxAdmin').onclick=()=>{if(ctxTarget&&confirm(`تعيين ${ctxTarget} مشرفاً؟`))socket.emit('make_admin',{targetUsername:ctxTarget})};
 document.getElementById('ctxPrivate').onclick=()=>{if(ctxTarget)startPrivateChat(ctxTarget)};
+document.getElementById('ctxBlockPrivate').onclick=()=>{
+  if(ctxTarget && confirm(`هل تريد حظر الرسائل الخاصة من ${ctxTarget}؟`)) {
+    socket.emit('block_user_private', { targetUsername: ctxTarget });
+  }
+};
+document.getElementById('ctxUnblockPrivate').onclick=()=>{
+  if(ctxTarget) {
+    socket.emit('unblock_user_private', { targetUsername: ctxTarget });
+  }
+};
 
 let isMicLocked = false;
 
