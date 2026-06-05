@@ -285,6 +285,7 @@
       align-items:center;gap:8px;
       flex-shrink:0;
       border-bottom:1px solid #1b5e20;
+      z-index:10;
     }
     .vstrip.on{display:flex}
     .vdot{width:7px;height:7px;border-radius:50%;background:#a5d6a7;animation:vdp 1s infinite}
@@ -630,15 +631,6 @@
   </div>
 </div>
 
-<!-- Voice active strip -->
-<div class="vstrip" id="vstrip">
-  <div class="vdot"></div>
-  <span>الغرفة الصوتية</span>
-  <span id="vstimer" style="font-variant-numeric:tabular-nums;letter-spacing:1px"></span>
-  <button class="vmute-btn" id="vmute" onclick="toggleMute()">🎤 كتم</button>
-  <button class="vleave-btn" onclick="leaveVoice()">✕ خروج</button>
-</div>
-
 <!-- ===== BODY (SPLIT) ===== -->
 <div class="body">
   <div class="overlay" id="overlay" onclick="toggleUsers(false)"></div>
@@ -650,6 +642,14 @@
 
   <!-- RIGHT: Chat Panel -->
   <div class="chat-panel">
+    <!-- Voice active strip - داخل chat-panel لمنع مشكلة الموبايل -->
+    <div class="vstrip" id="vstrip">
+      <div class="vdot"></div>
+      <span>الغرفة الصوتية</span>
+      <span id="vstimer" style="font-variant-numeric:tabular-nums;letter-spacing:1px"></span>
+      <button class="vmute-btn" id="vmute" onclick="toggleMute()">🎤 كتم</button>
+      <button class="vleave-btn" onclick="leaveVoice()">✕ خروج</button>
+    </div>
     <!-- Announcement Banner -->
     <div class="announcement-banner" id="announcementBanner">
       <span class="announcement-tag">📢 إعلان</span>
@@ -1048,7 +1048,6 @@ document.addEventListener('click',e=>{if(!e.target.closest('#ekb')&&e.target.id!
 /* ===================================================
    VOICE ROOM (WebRTC & Queue System)
 =================================================== */
-// يتم جلب بيانات TURN من السيرفر ديناميكياً - ضروري لشبكات الموبايل
 let iceConfig = {
   iceServers: [
     {urls:'stun:stun.l.google.com:19302'},
@@ -1056,33 +1055,33 @@ let iceConfig = {
   ]
 };
 
-// جلب بيانات TURN من السيرفر
 async function fetchTurnCredentials() {
   try {
     const resp = await fetch('/api/turn-credentials');
     const data = await resp.json();
     if (data.iceServers && data.iceServers.length > 0) {
       iceConfig = { iceServers: data.iceServers };
-      console.log('✅ تم جلب بيانات TURN بنجاح:', data.iceServers.length, 'خوادم');
+      console.log('TURN ready:', data.iceServers.length);
     }
   } catch(e) {
-    console.warn('⚠️ لم يتم جلب بيانات TURN، سيتم استخدام STUN فقط:', e);
+    console.warn('TURN fetch failed, using STUN only');
   }
 }
-fetchTurnCredentials();
+const iceReadyPromise = fetchTurnCredentials();
 
 let isSpeaker = false, isQueued = false;
 let micQueueList = [];
 let activeSpeakerSeconds = 0, speakerTimerInt = null;
 let isMuted = false, isSpeakerMuted = false;
-let localStream = null, pcs = {}, speakDets = {};
-let iceQueues = {}; // طابور انتظار مرشحي ICE
-let voiceMap = new Map(); // username -> {speaking}
+let localStream = null;
+let pcs_listener = {};
+let pcs_speaker  = {};
+let iceQueues = {};
+let speakDets = {};
+let voiceMap = new Map();
 let inVoice = true;
 
-function toggleVoice() {
-  handleMicButtonClick();
-}
+function toggleVoice() { handleMicButtonClick(); }
 
 function handleMicButtonClick() {
   if (isSpeaker) {
@@ -1092,68 +1091,57 @@ function handleMicButtonClick() {
     socket.emit('leave_mic');
     isQueued = false;
     document.getElementById('micBtn').classList.remove('on');
-    toast('✋ تم إنزال اليد والتراجع عن طلب المايك');
+    toast('\u270b \u062a\u0645 \u0625\u0646\u0632\u0627\u0644 \u0627\u0644\u064a\u062f \u0648\u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0637\u0644\u0628 \u0627\u0644\u0645\u0627\u064a\u0643');
   } else {
     if (isMicLocked && !isAdmin) {
-      toast('⚠️ المايك مقفل حالياً بواسطة إدارة الغرفة!', true);
+      toast('\u26a0\ufe0f \u0627\u0644\u0645\u0627\u064a\u0643 \u0645\u0642\u0641\u0644 \u062d\u0627\u0644\u064a\u0627\u064b!', true);
       return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        toast('⚠️ يجب استخدام اتصال آمن (HTTPS) لتتمكن من استخدام الميكروفون على الموبايل!', true);
-      } else {
-        toast('⚠️ متصفحك الحالي لا يدعم الوصول للميكروفون!', true);
-      }
+      toast('\u26a0\ufe0f \u0645\u062a\u0635\u0641\u062d\u0643 \u0644\u0627 \u064a\u062f\u0639\u0645 \u0627\u0644\u0645\u064a\u0643!', true);
       return;
     }
     navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       .then(stream => {
-        stream.getTracks().forEach(t => t.stop()); // request permission only
+        stream.getTracks().forEach(t => t.stop());
         socket.emit('request_mic');
         isQueued = true;
         document.getElementById('micBtn').classList.add('on');
-        toast('✋ تم رفع اليد والانضمام لطابور المايك');
+        toast('\u270b \u062a\u0645 \u0631\u0641\u0639 \u0627\u0644\u064a\u062f');
       })
       .catch(e => {
-        toast('⚠️ يرجى السماح بالوصول للميكروفون للمشاركة في الصوت', true);
+        toast('\u26a0\ufe0f \u064a\u0631\u062c\u0649 \u0627\u0644\u0633\u0645\u0627\u062d \u0628\u0627\u0644\u0645\u064a\u0643', true);
       });
   }
 }
 
 async function startSpeakerMic(){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    toast('⚠️ متصفحك الحالي لا يدعم الوصول للميكروفون أو يحتاج اتصال آمن (HTTPS)!', true);
+    toast('\u26a0\ufe0f \u0644\u0627 \u064a\u062f\u0639\u0645 \u0627\u0644\u0645\u064a\u0643!', true);
     socket.emit('leave_mic');
     return;
   }
   try {
     localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
   } catch(e) {
-    toast('⚠️ يرجى السماح بالوصول للميكروفون لبدء الكلام', true);
+    toast('\u26a0\ufe0f \u064a\u0631\u062c\u0649 \u0627\u0644\u0633\u0645\u0627\u062d \u0628\u0627\u0644\u0645\u064a\u0643', true);
     socket.emit('leave_mic');
     return;
   }
-  
+  await iceReadyPromise;
   isSpeaker = true;
   isQueued = false;
   isMuted = false;
-  
   document.getElementById('micBtn').classList.add('on');
   document.getElementById('vstrip').classList.add('on');
   document.getElementById('vmute').style.display = 'inline-block';
-  document.getElementById('vmute').textContent = '🎤 كتم';
-  
-  toast('🎤 المايك معك الآن! لديك 3 دقائق.');
-  
+  document.getElementById('vmute').textContent = '\ud83c\udf99\ufe0f \u0643\u062a\u0645';
+  toast('\ud83c\udf99\ufe0f \u0627\u0644\u0645\u0627\u064a\u0643 \u0645\u0639\u0643 \u0627\u0644\u0622\u0646!');
   activeSpeaker = { username: username, color: myColor, timeLeft: 180 };
   updateHeaderDisplay();
   startClientTimer(180);
-  
   startSD(username, localStream, true);
-  
-  // Notify server we are ready so it can broadcast to listeners
   socket.emit('speaker_ready');
-  
   renderUsers(chatUsers);
 }
 
@@ -1163,45 +1151,35 @@ function stopSpeakerMic(){
   isQueued = false;
   activeSpeaker = null;
   updateHeaderDisplay();
-  
-  Object.values(pcs).forEach(p => p.close());
-  pcs = {};
+  Object.values(pcs_speaker).forEach(p => p.close());
+  pcs_speaker = {};
+  Object.values(pcs_listener).forEach(p => p.close());
+  pcs_listener = {};
   iceQueues = {};
-  
-  if(localStream){
-    localStream.getTracks().forEach(t => t.stop());
-    localStream = null;
-  }
-  
+  if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   document.getElementById('audioBox').innerHTML = '';
   Object.values(speakDets).forEach(id => clearInterval(id));
   speakDets = {};
-  
   document.getElementById('micBtn').classList.remove('on');
   document.getElementById('vstrip').classList.remove('on');
-  
   clearInterval(speakerTimerInt);
   document.getElementById('hdrTimer').textContent = '00:00';
   document.getElementById('vstimer').textContent = '';
-  
-  toast('🔇 غادرت المايك');
+  toast('\ud83d\udd07 \u063a\u0627\u062f\u0631\u062a \u0627\u0644\u0645\u0627\u064a\u0643');
   renderUsers(chatUsers);
 }
 
 function stopListening(){
-  Object.values(pcs).forEach(p => p.close());
-  pcs = {};
+  Object.values(pcs_listener).forEach(p => p.close());
+  pcs_listener = {};
   iceQueues = {};
   document.getElementById('audioBox').innerHTML = '';
   Object.values(speakDets).forEach(id => clearInterval(id));
   speakDets = {};
-  
   clearInterval(speakerTimerInt);
   document.getElementById('hdrTimer').textContent = '00:00';
   document.getElementById('vstimer').textContent = '';
-  
   document.getElementById('vstrip').classList.remove('on');
-  
   activeSpeaker = null;
   updateHeaderDisplay();
   renderUsers(chatUsers);
@@ -1211,56 +1189,80 @@ function toggleMute(){
   if(!localStream) return;
   isMuted = !isMuted;
   localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
-  document.getElementById('vmute').textContent = isMuted ? '🔇 رفع الكتم' : '🎤 كتم';
+  document.getElementById('vmute').textContent = isMuted ? '\ud83d\udd07 \u0631\u0641\u0639 \u0627\u0644\u0643\u062a\u0645' : '\ud83c\udf99\ufe0f \u0643\u062a\u0645';
   socket.emit('voice_mute', { room, muted: isMuted });
-  toast(isMuted ? '🔇 تم كتم المايك الخاص بك' : '🎤 تم تفعيل المايك الخاص بك');
 }
 
 function toggleIncomingMute(){
   isSpeakerMuted = !isSpeakerMuted;
   const audios = document.getElementById('audioBox').querySelectorAll('video');
   audios.forEach(a => a.muted = isSpeakerMuted);
-  document.getElementById('btnSpeaker').textContent = isSpeakerMuted ? '🔇' : '🔊';
-  toast(isSpeakerMuted ? '🔇 تم كتم الصوت الوارد' : '🔊 تم تشغيل الصوت الوارد');
+  document.getElementById('btnSpeaker').textContent = isSpeakerMuted ? '\ud83d\udd07' : '\ud83d\udd0a';
 }
 
 function startClientTimer(seconds) {
   clearInterval(speakerTimerInt);
   activeSpeakerSeconds = seconds;
-  
-  const updateTimerDisplay = () => {
+  const update = () => {
     const m = String(Math.floor(activeSpeakerSeconds / 60)).padStart(2, '0');
     const s = String(activeSpeakerSeconds % 60).padStart(2, '0');
-    document.getElementById('hdrTimer').textContent = `${m}:${s}`;
-    document.getElementById('vstimer').textContent = `${m}:${s}`;
+    document.getElementById('hdrTimer').textContent = m+':'+s;
+    document.getElementById('vstimer').textContent = m+':'+s;
   };
-  
-  updateTimerDisplay();
-  
+  update();
   speakerTimerInt = setInterval(() => {
     activeSpeakerSeconds--;
     if (activeSpeakerSeconds <= 0) {
       clearInterval(speakerTimerInt);
       document.getElementById('hdrTimer').textContent = '00:00';
       document.getElementById('vstimer').textContent = '';
-    } else {
-      updateTimerDisplay();
-    }
+    } else { update(); }
   }, 1000);
 }
 
 async function connectToSpeaker(speakerName) {
+  if (pcs_listener[speakerName]) { pcs_listener[speakerName].close(); delete pcs_listener[speakerName]; }
+  await iceReadyPromise;
   try {
-    const pc = getPC(speakerName);
+    const pc = new RTCPeerConnection(iceConfig);
+    pcs_listener[speakerName] = pc;
+    try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch(err) {}
+    pc.onicecandidate = e => { if(e.candidate) socket.emit('voice_ice', { to: speakerName, candidate: e.candidate }); };
+    pc.ontrack = e => {
+      const stream = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
+      addAudio(speakerName, stream);
+      startSD(speakerName, stream, false);
+    };
+    pc.onconnectionstatechange = () => {
+      if(['failed','disconnected'].includes(pc.connectionState)) { pc.close(); delete pcs_listener[speakerName]; }
+    };
     const offer = await pc.createOffer({ offerToReceiveAudio: true });
     await pc.setLocalDescription(offer);
     socket.emit('voice_offer', { to: speakerName, offer });
-  } catch(e) {
-    console.error("Error connecting to speaker:", e);
-  }
+  } catch(e) { console.error('connectToSpeaker error:', e); }
 }
 
-/* Signaling Events */
+async function handleListenerOffer(listenerName, offer) {
+  if (pcs_speaker[listenerName]) { pcs_speaker[listenerName].close(); delete pcs_speaker[listenerName]; }
+  const pc = new RTCPeerConnection(iceConfig);
+  pcs_speaker[listenerName] = pc;
+  if (localStream) { localStream.getTracks().forEach(t => pc.addTrack(t, localStream)); }
+  pc.onicecandidate = e => { if(e.candidate) socket.emit('voice_ice', { to: listenerName, candidate: e.candidate }); };
+  pc.onconnectionstatechange = () => {
+    if(['failed','disconnected'].includes(pc.connectionState)) { pc.close(); delete pcs_speaker[listenerName]; }
+  };
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    socket.emit('voice_answer', { to: listenerName, answer: ans });
+    if (iceQueues[listenerName]) {
+      for (const c of iceQueues[listenerName]) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {} }
+      delete iceQueues[listenerName];
+    }
+  } catch(e) { console.error('handleListenerOffer error:', e); }
+}
+
 socket.on('speaker_changed', d => {
   if (d) {
     activeSpeaker = d;
@@ -1268,13 +1270,12 @@ socket.on('speaker_changed', d => {
     document.getElementById('vmute').style.display = 'none';
     startClientTimer(d.timeLeft);
     if (d.username !== username) {
+      if (pcs_listener[d.username]) { pcs_listener[d.username].close(); delete pcs_listener[d.username]; }
       connectToSpeaker(d.username);
     }
   } else {
     activeSpeaker = null;
-    if (!isSpeaker) {
-      stopListening();
-    }
+    if (!isSpeaker) stopListening();
   }
   updateHeaderDisplay();
   renderUsers(chatUsers);
@@ -1282,74 +1283,46 @@ socket.on('speaker_changed', d => {
 
 socket.on('queue_updated', d => {
   micQueueList = (d.queue || []).map(q => q.username);
-  
   const myPos = micQueueList.indexOf(username);
   if (myPos !== -1) {
     isQueued = true;
     document.getElementById('micBtn').classList.add('on');
   } else {
     isQueued = false;
-    if (!isSpeaker) {
-      document.getElementById('micBtn').classList.remove('on');
-    }
+    if (!isSpeaker) document.getElementById('micBtn').classList.remove('on');
   }
-  
   renderUsers(chatUsers);
 });
 
-socket.on('mic_assigned', () => {
-  startSpeakerMic();
-});
+socket.on('mic_assigned', () => { startSpeakerMic(); });
 
 socket.on('mic_demoted', () => {
   stopSpeakerMic();
-  toast('⏰ انتهى وقت المايك الخاص بك (3 دقائق)');
+  toast('\u23f0 \u0627\u0646\u062a\u0647\u0649 \u0648\u0642\u062a \u0627\u0644\u0645\u0627\u064a\u0643');
 });
 
 socket.on('voice_offer', async ({ from, offer }) => {
   if (!isSpeaker) return;
-  const pc = getPC(from);
-  try {
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    socket.emit('voice_answer', { to: from, answer: ans });
-
-    if (iceQueues[from]) {
-      for (const cand of iceQueues[from]) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(cand));
-        } catch(e) {}
-      }
-      delete iceQueues[from];
-    }
-  } catch(e) {}
+  await handleListenerOffer(from, offer);
 });
 
 socket.on('voice_answer', async ({ from, answer }) => {
-  const pc = pcs[from];
+  const pc = pcs_listener[from];
   if (pc) {
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
-
       if (iceQueues[from]) {
-        for (const cand of iceQueues[from]) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(cand));
-          } catch(e) {}
-        }
+        for (const c of iceQueues[from]) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {} }
         delete iceQueues[from];
       }
-    } catch(e) {}
+    } catch(e) { console.error('voice_answer error:', e); }
   }
 });
 
 socket.on('voice_ice', async ({ from, candidate }) => {
-  const pc = pcs[from];
+  const pc = pcs_listener[from] || pcs_speaker[from];
   if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch(e) {}
+    try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
   } else {
     if (!iceQueues[from]) iceQueues[from] = [];
     iceQueues[from].push(candidate);
@@ -1357,48 +1330,14 @@ socket.on('voice_ice', async ({ from, candidate }) => {
 });
 
 socket.on('voice_mute_update', ({ username: u, muted }) => {
-  if (voiceMap.has(u)) {
-    voiceMap.get(u).muted = muted;
-  }
+  if (voiceMap.has(u)) voiceMap.get(u).muted = muted;
 });
 
 socket.on('voice_speaking', ({ username: u, speaking }) => setSpeaking(u, speaking));
 
-function getPC(user){
-  if(pcs[user]) return pcs[user];
-  const pc = new RTCPeerConnection(iceConfig);
-  pcs[user] = pc;
-  
-  if(isSpeaker && localStream) {
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  } else {
-    if (pc.addTransceiver) {
-      try {
-        pc.addTransceiver('audio', { direction: 'recvonly' });
-      } catch(err) {
-        console.warn("Transceiver not supported or failed:", err);
-      }
-    }
-  }
-  
-  pc.onicecandidate = e => {
-    if(e.candidate) socket.emit('voice_ice', { to: user, candidate: e.candidate });
-  };
-  
-  pc.ontrack = e => {
-    addAudio(user, e.streams[0]);
-    startSD(user, e.streams[0], false);
-  };
-  
-  pc.onconnectionstatechange = () => {
-    if(['failed','disconnected'].includes(pc.connectionState)) {
-      pc.close();
-      delete pcs[user];
-    }
-  };
-  
-  return pc;
-}
+const pcs = new Proxy({}, {
+  get(_, key) { return pcs_listener[key] || pcs_speaker[key]; }
+});
 
 function addAudio(user, stream){
   let a = document.getElementById('a-' + user);
@@ -1430,12 +1369,14 @@ function addAudio(user, stream){
 }
 
 function dropVoiceUser(user){
-  if(pcs[user]){pcs[user].close();delete pcs[user]}
+  if(pcs_listener[user]){pcs_listener[user].close();delete pcs_listener[user];}
+  if(pcs_speaker[user]){pcs_speaker[user].close();delete pcs_speaker[user];}
   delete iceQueues[user];
   const a=document.getElementById('a-'+user);if(a)a.remove();
-  if(speakDets[user]){clearInterval(speakDets[user]);delete speakDets[user]}
+  if(speakDets[user]){clearInterval(speakDets[user]);delete speakDets[user];}
   renderUsers(chatUsers);
 }
+
 function startSD(user,stream,isLocal){
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
