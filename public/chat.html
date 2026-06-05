@@ -9,6 +9,20 @@
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;overflow:hidden}
 
+    .vip-badge {
+      width: 18px;
+      height: 18px;
+      vertical-align: middle;
+      margin-left: 6px;
+      margin-right: 2px;
+      display: inline-block;
+      animation: badge-glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes badge-glow {
+      from { filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.4)); }
+      to { filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.8)); }
+    }
+
     body{
       font-family:'Tajawal',sans-serif;
       background:#e0e0e0;
@@ -719,16 +733,31 @@
         <span class="admin-btn-icon">📢</span>
         <span>إعلان جديد</span>
       </button>
+      <button class="admin-btn primary" onclick="toggleUnbanInput()" style="background: linear-gradient(135deg, #1565c0, #0d47a1); color: #fff; border: none;">
+        <span class="admin-btn-icon">🔓</span>
+        <span>إلغاء حظر</span>
+      </button>
     </div>
     <div class="admin-input-group" id="announcementInputGroup" style="display: none;">
       <span class="admin-input-label">نص الإعلان الجديد:</span>
       <input type="text" class="admin-text-input" id="announcementInput" placeholder="اكتب الإعلان هنا..." onkeydown="handleAnnouncementKey(event)">
       <button class="admin-submit-btn" onclick="adminSubmitAnnouncement()">إرسال الإعلان</button>
     </div>
+    <div class="admin-input-group" id="unbanInputGroup" style="display: none;">
+      <span class="admin-input-label">اسم المستخدم لإلغاء حظره:</span>
+      <input type="text" class="admin-text-input" id="unbanInput" placeholder="اكتب اسم المستخدم هنا..." onkeydown="handleUnbanKey(event)">
+      <button class="admin-submit-btn" onclick="adminSubmitUnban()" style="background: #388e3c;">إلغاء الحظر</button>
+    </div>
+    <div class="admin-input-group" id="bannedListGroup" style="display: none; border-top: 1px solid #eee; padding-top: 12px; margin-top: 12px;">
+      <span class="admin-input-label" style="margin-bottom: 6px; display: block;">🚫 قائمة المحظورين في هذه الغرفة:</span>
+      <div id="bannedUsersContainer" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; padding: 4px; width: 100%;">
+        <!-- Filled by JS -->
+      </div>
+    </div>
   </div>
 </div>
 
-<div id="audioBox" style="display:none"></div>
+<div id="audioBox" style="position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0.01; pointer-events: none;"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -737,6 +766,12 @@
 =================================================== */
 const username = sessionStorage.getItem('chatUsername');
 const room     = sessionStorage.getItem('chatRoom');
+
+function isKhalid(name) {
+  if (!name) return false;
+  const raw = name.replace(/^\[(عضو|مسجل)\]\s*/, '');
+  return raw === 'خالد';
+}
 const myColor  = sessionStorage.getItem('chatColor') || '#e53935';
 let activeSpeaker = null;
 
@@ -746,7 +781,8 @@ function updateHeaderDisplay() {
   const roomEl = document.getElementById('hdrRoom');
   if (!roomEl) return;
   if (activeSpeaker && activeSpeaker.username) {
-    roomEl.textContent = `${room} - المتحدث: ${activeSpeaker.username}`;
+    const isKh = isKhalid(activeSpeaker.username);
+    roomEl.textContent = `${room} - المتحدث: ${isKh ? '👑 ' : ''}${activeSpeaker.username}`;
   } else {
     roomEl.textContent = room;
   }
@@ -843,7 +879,14 @@ socket.on('user_typing',({username:u,isTyping:t})=>{
 socket.on('kicked',({message:m})=>{toast(m,true);setTimeout(()=>location.href='/',2500)});
 socket.on('banned',({message:m})=>{sysMsg('🚫 '+m);setTimeout(()=>location.href='/',3000)});
 socket.on('chat_cleared',({by})=>{document.getElementById('msgs').innerHTML='';sysMsg(`مسح المحادثة بواسطة ${by}`)});
-socket.on('error_msg',({message:m})=>toast(m,true));
+socket.on('error_msg',({message:m})=>{
+  toast(m,true);
+  if (m.includes('كلمة مرور') || m.includes('المسؤول') || m.includes('password') || m.includes('admin')) {
+    setTimeout(() => {
+      location.href = '/';
+    }, 2000);
+  }
+});
 socket.on('mic_lock_status', ({ locked }) => {
   handleMicLockChange(locked);
   toast(locked ? '🔒 تم قفل المايك بواسطة إدارة الغرفة!' : '🔓 تم فتح المايك بواسطة إدارة الغرفة!');
@@ -888,11 +931,15 @@ function renderUsers(users){
       icon = '';
     }
 
+    const isKh = isKhalid(u.username);
     const row=document.createElement('div');
     row.className='user-row'+(isSpeaking?' speaking':'');
     row.innerHTML=`
       <div class="ua" style="background:${clr}">${u.username[0]}</div>
-      <span class="un" style="color:${clr}">${esc(u.username)}${isMe?' (أنت)':''}</span>
+      <span class="un" style="color:${clr}">
+        ${isKh ? '<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">' : ''}
+        ${esc(u.username)}${isMe?' (أنت)':''}
+      </span>
       <span class="ui" style="font-size:13px; font-weight:bold; color:#e09610">${icon}</span>
     `;
     if(!isMe&&isAdmin){
@@ -928,9 +975,13 @@ function addMsg(d){
   const isMe=d.username===username;
   const row=document.createElement('div');
   row.className='mrow';
+  const isKh = isKhalid(d.username);
   row.innerHTML=`
     <div class="mrow-hdr">
-      <span class="mrow-name" style="color:${clr}">${esc(d.username)}</span>
+      <span class="mrow-name" style="color:${clr}">
+        ${isKh ? '<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">' : ''}
+        ${esc(d.username)}
+      </span>
       <span class="mrow-time">${d.time||ft()}</span>
     </div>
     <div class="mrow-text" style="color:${isMe?clr:tclr}">${fmsg(d.message)}</div>
@@ -997,13 +1048,35 @@ document.addEventListener('click',e=>{if(!e.target.closest('#ekb')&&e.target.id!
 /* ===================================================
    VOICE ROOM (WebRTC & Queue System)
 =================================================== */
-const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+// يتم جلب بيانات TURN من السيرفر ديناميكياً - ضروري لشبكات الموبايل
+let iceConfig = {
+  iceServers: [
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'}
+  ]
+};
+
+// جلب بيانات TURN من السيرفر
+async function fetchTurnCredentials() {
+  try {
+    const resp = await fetch('/api/turn-credentials');
+    const data = await resp.json();
+    if (data.iceServers && data.iceServers.length > 0) {
+      iceConfig = { iceServers: data.iceServers };
+      console.log('✅ تم جلب بيانات TURN بنجاح:', data.iceServers.length, 'خوادم');
+    }
+  } catch(e) {
+    console.warn('⚠️ لم يتم جلب بيانات TURN، سيتم استخدام STUN فقط:', e);
+  }
+}
+fetchTurnCredentials();
 
 let isSpeaker = false, isQueued = false;
 let micQueueList = [];
 let activeSpeakerSeconds = 0, speakerTimerInt = null;
 let isMuted = false, isSpeakerMuted = false;
 let localStream = null, pcs = {}, speakDets = {};
+let iceQueues = {}; // طابور انتظار مرشحي ICE
 let voiceMap = new Map(); // username -> {speaking}
 let inVoice = true;
 
@@ -1025,6 +1098,14 @@ function handleMicButtonClick() {
       toast('⚠️ المايك مقفل حالياً بواسطة إدارة الغرفة!', true);
       return;
     }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        toast('⚠️ يجب استخدام اتصال آمن (HTTPS) لتتمكن من استخدام الميكروفون على الموبايل!', true);
+      } else {
+        toast('⚠️ متصفحك الحالي لا يدعم الوصول للميكروفون!', true);
+      }
+      return;
+    }
     navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       .then(stream => {
         stream.getTracks().forEach(t => t.stop()); // request permission only
@@ -1040,6 +1121,11 @@ function handleMicButtonClick() {
 }
 
 async function startSpeakerMic(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('⚠️ متصفحك الحالي لا يدعم الوصول للميكروفون أو يحتاج اتصال آمن (HTTPS)!', true);
+    socket.emit('leave_mic');
+    return;
+  }
   try {
     localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
   } catch(e) {
@@ -1080,6 +1166,7 @@ function stopSpeakerMic(){
   
   Object.values(pcs).forEach(p => p.close());
   pcs = {};
+  iceQueues = {};
   
   if(localStream){
     localStream.getTracks().forEach(t => t.stop());
@@ -1104,6 +1191,7 @@ function stopSpeakerMic(){
 function stopListening(){
   Object.values(pcs).forEach(p => p.close());
   pcs = {};
+  iceQueues = {};
   document.getElementById('audioBox').innerHTML = '';
   Object.values(speakDets).forEach(id => clearInterval(id));
   speakDets = {};
@@ -1130,7 +1218,7 @@ function toggleMute(){
 
 function toggleIncomingMute(){
   isSpeakerMuted = !isSpeakerMuted;
-  const audios = document.getElementById('audioBox').querySelectorAll('audio');
+  const audios = document.getElementById('audioBox').querySelectorAll('video');
   audios.forEach(a => a.muted = isSpeakerMuted);
   document.getElementById('btnSpeaker').textContent = isSpeakerMuted ? '🔇' : '🔊';
   toast(isSpeakerMuted ? '🔇 تم كتم الصوت الوارد' : '🔊 تم تشغيل الصوت الوارد');
@@ -1164,7 +1252,7 @@ function startClientTimer(seconds) {
 async function connectToSpeaker(speakerName) {
   try {
     const pc = getPC(speakerName);
-    const offer = await pc.createOffer();
+    const offer = await pc.createOffer({ offerToReceiveAudio: true });
     await pc.setLocalDescription(offer);
     socket.emit('voice_offer', { to: speakerName, offer });
   } catch(e) {
@@ -1221,23 +1309,50 @@ socket.on('mic_demoted', () => {
 socket.on('voice_offer', async ({ from, offer }) => {
   if (!isSpeaker) return;
   const pc = getPC(from);
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const ans = await pc.createAnswer();
-  await pc.setLocalDescription(ans);
-  socket.emit('voice_answer', { to: from, answer: ans });
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    socket.emit('voice_answer', { to: from, answer: ans });
+
+    if (iceQueues[from]) {
+      for (const cand of iceQueues[from]) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch(e) {}
+      }
+      delete iceQueues[from];
+    }
+  } catch(e) {}
 });
 
 socket.on('voice_answer', async ({ from, answer }) => {
-  if (pcs[from]) {
-    await pcs[from].setRemoteDescription(new RTCSessionDescription(answer));
+  const pc = pcs[from];
+  if (pc) {
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+      if (iceQueues[from]) {
+        for (const cand of iceQueues[from]) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          } catch(e) {}
+        }
+        delete iceQueues[from];
+      }
+    } catch(e) {}
   }
 });
 
 socket.on('voice_ice', async ({ from, candidate }) => {
-  if (pcs[from]) {
+  const pc = pcs[from];
+  if (pc && pc.remoteDescription && pc.remoteDescription.type) {
     try {
-      await pcs[from].addIceCandidate(new RTCIceCandidate(candidate));
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
     } catch(e) {}
+  } else {
+    if (!iceQueues[from]) iceQueues[from] = [];
+    iceQueues[from].push(candidate);
   }
 });
 
@@ -1251,11 +1366,19 @@ socket.on('voice_speaking', ({ username: u, speaking }) => setSpeaking(u, speaki
 
 function getPC(user){
   if(pcs[user]) return pcs[user];
-  const pc = new RTCPeerConnection(STUN);
+  const pc = new RTCPeerConnection(iceConfig);
   pcs[user] = pc;
   
   if(isSpeaker && localStream) {
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  } else {
+    if (pc.addTransceiver) {
+      try {
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+      } catch(err) {
+        console.warn("Transceiver not supported or failed:", err);
+      }
+    }
   }
   
   pc.onicecandidate = e => {
@@ -1280,10 +1403,16 @@ function getPC(user){
 function addAudio(user, stream){
   let a = document.getElementById('a-' + user);
   if(!a){
-    a = document.createElement('audio');
+    a = document.createElement('video');
     a.id = 'a-' + user;
     a.autoplay = true;
     a.playsInline = true;
+    a.setAttribute('playsinline', 'true');
+    a.style.position = 'absolute';
+    a.style.width = '0px';
+    a.style.height = '0px';
+    a.style.opacity = '0';
+    a.style.pointerEvents = 'none';
     document.getElementById('audioBox').appendChild(a);
   }
   a.srcObject = stream;
@@ -1302,6 +1431,7 @@ function addAudio(user, stream){
 
 function dropVoiceUser(user){
   if(pcs[user]){pcs[user].close();delete pcs[user]}
+  delete iceQueues[user];
   const a=document.getElementById('a-'+user);if(a)a.remove();
   if(speakDets[user]){clearInterval(speakDets[user]);delete speakDets[user]}
   renderUsers(chatUsers);
@@ -1426,17 +1556,13 @@ function adminToggleMicLock() {
 }
 
 function adminDropSpeaker() {
-  if (confirm('هل أنت متأكد من سحب المايك من المتحدث الحالي؟')) {
-    socket.emit('drop_speaker');
-    toggleAdminPanel(false);
-  }
+  socket.emit('drop_speaker');
+  toggleAdminPanel(false);
 }
 
 function adminClearChat() {
-  if (confirm('هل أنت متأكد من مسح جميع الرسائل في الغرفة؟')) {
-    socket.emit('clear_chat');
-    toggleAdminPanel(false);
-  }
+  socket.emit('clear_chat');
+  toggleAdminPanel(false);
 }
 
 function toggleAnnouncementInput() {
@@ -1464,6 +1590,70 @@ function adminSubmitAnnouncement() {
   const group = document.getElementById('announcementInputGroup');
   if (group) group.style.display = 'none';
   toggleAdminPanel(false);
+}
+
+function toggleUnbanInput() {
+  const inputGroup = document.getElementById('unbanInputGroup');
+  const listGroup = document.getElementById('bannedListGroup');
+  if (inputGroup && listGroup) {
+    const isShowing = inputGroup.style.display === 'none';
+    inputGroup.style.display = isShowing ? 'flex' : 'none';
+    listGroup.style.display = isShowing ? 'flex' : 'none';
+    if (isShowing) {
+      document.getElementById('unbanInput').focus();
+      // Fetch banned list from server
+      socket.emit('get_banned_users');
+    }
+  }
+}
+
+function handleUnbanKey(e) {
+  if (e.key === 'Enter') {
+    adminSubmitUnban();
+  }
+}
+
+function adminSubmitUnban() {
+  const input = document.getElementById('unbanInput');
+  if (!input) return;
+  const targetUsername = input.value.trim();
+  if (!targetUsername) return;
+  socket.emit('unban_user', { targetUsername });
+  input.value = '';
+  const group = document.getElementById('unbanInputGroup');
+  if (group) group.style.display = 'none';
+  toggleAdminPanel(false);
+}
+
+socket.on('banned_users_list', ({ banned }) => {
+  const container = document.getElementById('bannedUsersContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  if (!banned || banned.length === 0) {
+    container.innerHTML = '<div style="padding: 12px; text-align: center; color: #999; font-size: 12px;">لا يوجد أعضاء محظورون حالياً</div>';
+    return;
+  }
+  
+  banned.forEach(b => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 13px;';
+    row.innerHTML = `
+      <div style="text-align: right;">
+        <strong style="color: #c62828;">${esc(b.username)}</strong>
+        <span style="font-size: 11px; color: #777; display: block; margin-top: 2px;">بواسطة: ${esc(b.banned_by)}</span>
+      </div>
+      <button onclick="quickUnban('${esc(b.username)}')" style="background: #388e3c; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; font-family: 'Tajawal', sans-serif;">فك الحظر</button>
+    `;
+    container.appendChild(row);
+  });
+});
+
+function quickUnban(targetUsername) {
+  if (confirm(`هل أنت متأكد من فك الحظر عن ${targetUsername}؟`)) {
+    socket.emit('unban_user', { targetUsername });
+    toggleAdminPanel(false);
+  }
 }
 
 function toggleMenu(e) {

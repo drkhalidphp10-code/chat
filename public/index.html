@@ -446,6 +446,9 @@
           <input type="password" class="dialog-input" id="joinPassword" placeholder="أدخل كلمة المرور...">
         </div>
 
+        <!-- Error message inside the dialog -->
+        <div id="dialogErrorMsg" style="display: none; color: #d32f2f; font-size: 13px; font-weight: bold; text-align: center; margin-top: 8px; margin-bottom: 2px; direction: rtl;"></div>
+
         <!-- Footer Actions -->
         <div class="dialog-footer">
           <button class="save-icon-btn" title="حفظ الاسم">💾</button>
@@ -591,6 +594,8 @@
     // Join Dialog handlers
     function openJoinDialog(room) {
       selectedRoom = room;
+      const errorEl = document.getElementById('dialogErrorMsg');
+      if (errorEl) errorEl.style.display = 'none';
       document.getElementById('dialogOverlay').classList.add('active');
       
       // Auto-focus input and set random guest name if default
@@ -608,6 +613,8 @@
     // Switch between tabs in dialog popup
     function setTab(tab) {
       activeTab = tab;
+      const errorEl = document.getElementById('dialogErrorMsg');
+      if (errorEl) errorEl.style.display = 'none';
       
       // Update tab styles
       const tabs = document.querySelectorAll('.dialog-tab');
@@ -628,37 +635,68 @@
     }
 
     // Submit dialog and enter chat room
-    function submitJoin() {
+    async function submitJoin() {
       const nameInput = document.getElementById('joinName');
       let name = nameInput.value.trim();
+      const errorEl = document.getElementById('dialogErrorMsg');
+      if (errorEl) errorEl.style.display = 'none';
       
       if (!name) {
-        alert('يرجى إدخال الاسم للمتابعة');
+        showDialogError('يرجى إدخال الاسم للمتابعة');
         return;
       }
 
-      const isLoggingAsAdmin = name.toLowerCase() === 'admin';
       const password = document.getElementById('joinPassword').value.trim();
+
+      if (name === 'خالد') {
+        if (activeTab !== 'registered') {
+          setTab('registered');
+          showDialogError('اسم "خالد" مسجل، يرجى الدخول من تبويب "مسجل" وكتابة كلمة المرور.');
+          return;
+        }
+        if (password !== '1234') {
+          showDialogError('كلمة المرور غير صحيحة لحساب خالد!');
+          return;
+        }
+      }
+
+      const isLoggingAsAdmin = name.toLowerCase() === 'admin';
 
       if (isLoggingAsAdmin) {
         if (!password) {
           // If they typed admin but password field is hidden, show it and request password
           setTab('registered'); // auto-switch to show password field
-          alert('حساب المسؤول يتطلب كلمة مرور. يرجى إدخالها.');
-          return;
-        }
-        if (password !== 'admin123') {
-          alert('كلمة المرور غير صحيحة لحساب المسؤول!');
+          showDialogError('حساب المسؤول يتطلب كلمة مرور. يرجى إدخالها.');
           return;
         }
       }
 
       if (activeTab === 'member' || activeTab === 'registered') {
         if (!isLoggingAsAdmin && !password) {
-          alert('يرجى إدخال كلمة المرور');
+          showDialogError('يرجى إدخال كلمة المرور');
           return;
         }
-        // Member/Registered name prefixes for visual distinctiveness
+      }
+
+      // Check admin password via API if name is admin
+      if (isLoggingAsAdmin) {
+        try {
+          const res = await fetch('/api/verify-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: name, password: password })
+          });
+          const data = await res.json();
+          if (!data.success) {
+            showDialogError(data.message || 'كلمة المرور غير صحيحة لحساب المسؤول!');
+            return;
+          }
+        } catch (e) {
+          // fallback if network fails
+        }
+      }
+
+      if (activeTab === 'member' || activeTab === 'registered') {
         if (!isLoggingAsAdmin) {
           name = `[${activeTab === 'member' ? 'عضو' : 'مسجل'}] ` + name;
         }
@@ -679,6 +717,16 @@
       sessionStorage.setItem('chatPassword', password);
 
       window.location.href = '/chat';
+    }
+
+    function showDialogError(msg) {
+      const errorEl = document.getElementById('dialogErrorMsg');
+      if (errorEl) {
+        errorEl.textContent = msg;
+        errorEl.style.display = 'block';
+      } else {
+        alert(msg);
+      }
     }
 
     function escapeHtml(str) {

@@ -6,6 +6,7 @@
   <title>لوحة الإدارة - شات عربي</title>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
   <style>
     body { background: var(--bg-darkest); min-height: 100vh; }
 
@@ -196,13 +197,26 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal text-center" style="max-width: 400px; padding: 24px;">
+    <h3 style="font-size: 20px; margin-bottom: 12px; color: var(--danger);" id="confirmTitle">تأكيد الإجراء</h3>
+    <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px;" id="confirmMessage">هل أنت متأكد من القيام بهذا الإجراء؟</p>
+    <div style="display: flex; gap: 12px; justify-content: center;">
+      <button class="btn btn-danger btn-sm" style="flex:1;" id="confirmYesBtn">نعم، متأكد</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;" id="confirmNoBtn">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- Login Gate -->
 <div class="login-gate" id="loginGate">
   <div class="glass-card login-gate-card">
     <div class="login-gate-icon">👑</div>
     <h1 class="login-gate-title">لوحة الإدارة</h1>
-    <p class="login-gate-sub">أدخل كلمة مرور المدير للمتابعة</p>
+    <p class="login-gate-sub">أدخل بيانات المسؤول للمتابعة</p>
     <div class="flex flex-col gap-3">
+      <input type="text" id="adminUsername" class="form-input" placeholder="اسم المستخدم (مثال: admin)...">
       <input type="password" id="adminPassword" class="form-input" placeholder="كلمة المرور...">
       <button class="btn btn-primary w-full" onclick="adminLogin()">دخول</button>
       <a href="/" class="btn btn-ghost w-full">← العودة للدردشة</a>
@@ -221,6 +235,9 @@
     </div>
     <div class="nav-item" onclick="showPage('rooms', this)">
       <span class="nav-icon">🏠</span> إدارة الغرف
+    </div>
+    <div class="nav-item" onclick="showPage('admins', this)">
+      <span class="nav-icon">🔑</span> إدارة المشرفين
     </div>
     <div class="nav-item" onclick="showPage('stats', this)">
       <span class="nav-icon">📈</span> الإحصائيات
@@ -284,10 +301,52 @@
               <th>النوع</th>
               <th>المتصلون</th>
               <th>الوصف</th>
+              <th>العمليات</th>
             </tr>
           </thead>
           <tbody id="roomsTableBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Admins Page -->
+    <div class="page-section" id="page-admins">
+      <div style="display:grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; margin-bottom: 24px;">
+        <!-- Left: Admin List -->
+        <div>
+          <div class="section-title">🔑 المسؤولون المسجلون</div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>اسم المستخدم</th>
+                  <th>تاريخ الإنشاء</th>
+                  <th>العمليات</th>
+                </tr>
+              </thead>
+              <tbody id="adminsTableBody">
+                <!-- Admins list populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Right: Add Admin Form -->
+        <div>
+          <div class="section-title">➕ إضافة مسؤول جديد</div>
+          <div class="glass-card" style="padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-lg);">
+            <div class="flex flex-col gap-3">
+              <div class="form-group">
+                <label class="form-label" for="newAdminUsername">اسم المستخدم</label>
+                <input type="text" id="newAdminUsername" class="form-input" placeholder="مثال: host_admin">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="newAdminPassword">كلمة المرور</label>
+                <input type="password" id="newAdminPassword" class="form-input" placeholder="كلمة المرور...">
+              </div>
+              <button class="btn btn-primary w-full" onclick="addAdmin()">إضافة المسؤول</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -315,32 +374,125 @@
 </div>
 
 <script>
+let adminUser = '';
 let adminPass = '';
+let socket = null;
 
-function adminLogin() {
+// Reusable Custom Confirmation Modal
+function showConfirmModal(title, message, onYes) {
+  const modal = document.getElementById('confirmModal');
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMessage').textContent = message;
+
+  modal.classList.add('active');
+
+  const yesBtn = document.getElementById('confirmYesBtn');
+  const noBtn = document.getElementById('confirmNoBtn');
+
+  // Clear previous event listeners
+  const newYesBtn = yesBtn.cloneNode(true);
+  const newNoBtn = noBtn.cloneNode(true);
+  yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+  noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+
+  newYesBtn.addEventListener('click', () => {
+    modal.classList.remove('active');
+    if (onYes) onYes();
+  });
+
+  newNoBtn.addEventListener('click', () => {
+    modal.classList.remove('active');
+  });
+}
+
+function connectAdminSocket() {
+  if (socket) return;
+  socket = io();
+
+  socket.on('connect', () => {
+    socket.emit('admin_auth', { username: adminUser, password: adminPass });
+  });
+
+  socket.on('admin_stats_update', ({ stats }) => {
+    updateDashboard(stats);
+  });
+
+  socket.on('admin_auth_failed', (d) => {
+    showToast(d.message || 'فشلت مصادقة WebSocket', 'error');
+    logout();
+  });
+
+  socket.on('disconnect', () => {
+    showToast('انقطع الاتصال بالخادم، جاري إعادة المحاولة...', 'error');
+  });
+}
+
+async function adminLogin() {
+  const user = document.getElementById('adminUsername').value.trim();
   const pass = document.getElementById('adminPassword').value;
-  if (!pass) { showToast('أدخل كلمة المرور', 'error'); return; }
-  adminPass = pass;
-  loadStats();
+
+  if (!user || !pass) {
+    showToast('أدخل اسم المستخدم وكلمة المرور', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      showToast(data.message || 'بيانات الدخول غير صحيحة', 'error');
+      return;
+    }
+
+    adminUser = user;
+    adminPass = pass;
+
+    // Save session
+    sessionStorage.setItem('adminUser', adminUser);
+    sessionStorage.setItem('adminPass', adminPass);
+
+    // Show Admin Panel
+    document.getElementById('loginGate').style.display = 'none';
+    document.getElementById('adminLayout').style.display = 'grid';
+
+    connectAdminSocket();
+    loadStats();
+    loadRoomsTable();
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('adminUser');
+  sessionStorage.removeItem('adminPass');
+  adminUser = '';
+  adminPass = '';
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+  document.getElementById('adminLayout').style.display = 'none';
+  document.getElementById('loginGate').style.display = 'flex';
 }
 
 async function loadStats() {
   try {
-    const res = await fetch(`/api/admin/stats?password=${encodeURIComponent(adminPass)}`);
+    const res = await fetch(`/api/admin/stats?username=${encodeURIComponent(adminUser)}&password=${encodeURIComponent(adminPass)}`);
     const data = await res.json();
     if (!data.success) {
-      showToast('كلمة مرور خاطئة', 'error');
+      showToast('جلسة غير صالحة، يرجى إعادة تسجيل الدخول', 'error');
+      logout();
       return;
     }
-    // Show admin layout
-    document.getElementById('loginGate').style.display = 'none';
-    document.getElementById('adminLayout').style.display = 'grid';
-
-    const { stats } = data;
-    updateDashboard(stats);
-    loadRoomsTable();
+    updateDashboard(data.stats);
   } catch (e) {
-    showToast('خطأ في الاتصال بالخادم', 'error');
+    showToast('خطأ في جلب الإحصائيات', 'error');
   }
 }
 
@@ -408,15 +560,135 @@ async function loadRoomsTable() {
           </div>
         </td>
         <td style="color:var(--text-muted);font-size:13px;">${escapeHtml(r.description || '-')}</td>
+        <td>
+          <button class="btn btn-danger btn-sm" onclick="confirmDeleteRoom(${r.id}, '${escapeHtml(r.name)}')">حذف</button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
-  } catch (e) {}
+  } catch (e) {
+    showToast('خطأ في جلب قائمة الغرف', 'error');
+  }
+}
+
+function confirmDeleteRoom(roomId, roomName) {
+  showConfirmModal(
+    'حذف الغرفة 🏠',
+    `هل أنت متأكد من حذف غرفة "${roomName}"؟ سيؤدي ذلك لإخراج جميع المتصلين بها فوراً.`,
+    () => deleteRoom(roomId)
+  );
+}
+
+async function deleteRoom(roomId) {
+  try {
+    const res = await fetch('/api/admin/delete-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminUsername: adminUser, adminPassword: adminPass, roomId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('تم حذف الغرفة بنجاح وبث الحدث للمشتركين', 'success');
+      loadRoomsTable();
+      loadStats();
+    } else {
+      showToast(data.error || 'فشل حذف الغرفة', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
+}
+
+async function loadAdminsTable() {
+  try {
+    const res = await fetch(`/api/admin/list-admins?username=${encodeURIComponent(adminUser)}&password=${encodeURIComponent(adminPass)}`);
+    const data = await res.json();
+    const tbody = document.getElementById('adminsTableBody');
+    tbody.innerHTML = '';
+    (data.admins || []).forEach(adm => {
+      const tr = document.createElement('tr');
+      const isSelf = adm.username.toLowerCase() === adminUser.toLowerCase();
+      const createdDate = new Date(adm.created_at).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(adm.username)}</strong> ${isSelf ? '<span class="badge badge-success">حسابك الحالي</span>' : ''}</td>
+        <td style="color:var(--text-muted);font-size:13px;">${createdDate}</td>
+        <td>
+          <button class="btn btn-danger btn-sm" ${isSelf ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} onclick="confirmDeleteAdmin(${adm.id}, '${escapeHtml(adm.username)}')">حذف</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    showToast('خطأ في جلب قائمة المسؤولين', 'error');
+  }
+}
+
+function confirmDeleteAdmin(adminId, username) {
+  showConfirmModal(
+    'حذف مسؤول 🔑',
+    `هل أنت متأكد من سحب صلاحية المسؤول وحذف الحساب "${username}"؟`,
+    () => deleteAdmin(adminId)
+  );
+}
+
+async function deleteAdmin(targetId) {
+  try {
+    const res = await fetch('/api/admin/delete-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminUsername: adminUser, adminPassword: adminPass, targetId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('تم حذف المسؤول بنجاح', 'success');
+      loadAdminsTable();
+    } else {
+      showToast(data.error || 'فشل حذف المسؤول', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
+}
+
+async function addAdmin() {
+  const newUser = document.getElementById('newAdminUsername').value.trim();
+  const newPass = document.getElementById('newAdminPassword').value;
+
+  if (!newUser || !newPass) {
+    showToast('الرجاء إدخال اسم المستخدم وكلمة المرور الجديدة', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/add-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adminUsername: adminUser,
+        adminPassword: adminPass,
+        newUsername: newUser,
+        newPassword: newPass
+      })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      showToast('تم إضافة المسؤول الجديد بنجاح', 'success');
+      document.getElementById('newAdminUsername').value = '';
+      document.getElementById('newAdminPassword').value = '';
+      loadAdminsTable();
+    } else {
+      showToast(data.error || 'فشل إضافة المسؤول الجديد', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
 }
 
 function refreshStats() {
   loadStats();
-  showToast('تم التحديث', 'success');
+  showToast('تم التحديث المباشر للبيانات', 'success');
 }
 
 function showPage(page, el) {
@@ -428,11 +700,13 @@ function showPage(page, el) {
   const titles = {
     dashboard: '📊 لوحة التحكم',
     rooms: '🏠 إدارة الغرف',
+    admins: '🔑 إدارة المشرفين',
     stats: '📈 الإحصائيات'
   };
-  document.getElementById('pageTitle').textContent = titles[page];
+  document.getElementById('pageTitle').textContent = titles[page] || '';
 
   if (page === 'rooms') loadRoomsTable();
+  if (page === 'admins') loadAdminsTable();
 }
 
 function showToast(msg, type = 'info') {
@@ -452,12 +726,23 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
-// Auto-refresh every 30s
-setInterval(() => {
-  if (adminPass && document.getElementById('adminLayout').style.display !== 'none') {
+// Restore session from sessionStorage on load
+window.addEventListener('DOMContentLoaded', () => {
+  const savedUser = sessionStorage.getItem('adminUser');
+  const savedPass = sessionStorage.getItem('adminPass');
+
+  if (savedUser && savedPass) {
+    adminUser = savedUser;
+    adminPass = savedPass;
+
+    document.getElementById('loginGate').style.display = 'none';
+    document.getElementById('adminLayout').style.display = 'grid';
+
+    connectAdminSocket();
     loadStats();
+    loadRoomsTable();
   }
-}, 30000);
+});
 </script>
 </body>
 </html>
