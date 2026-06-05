@@ -106,6 +106,26 @@ async function createTables() {
       expires_at TIMESTAMP NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    `CREATE TABLE IF NOT EXISTS admin_users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(50) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    `CREATE TABLE IF NOT EXISTS private_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sender VARCHAR(50) NOT NULL,
+      receiver VARCHAR(50) NOT NULL,
+      message TEXT NOT NULL,
+      message_type ENUM('text', 'emoji') DEFAULT 'text',
+      is_read BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sender (sender),
+      INDEX idx_receiver (receiver),
+      INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   ];
 
   for (const query of queries) {
@@ -132,6 +152,19 @@ async function createTables() {
       );
     } catch (e) {}
   }
+
+  // Seed default admin in database
+  try {
+    const [rows] = await db.query('SELECT id FROM admin_users LIMIT 1');
+    if (rows.length === 0) {
+      await db.query(
+        'INSERT IGNORE INTO admin_users (username, password) VALUES (?, ?)',
+        ['admin', 'admin123']
+      );
+      console.log('👑 تم إدراج حساب المسؤول الافتراضي في قاعدة البيانات');
+    }
+  } catch (e) {}
+
   console.log('✅ تم إنشاء جداول قاعدة البيانات');
 }
 
@@ -146,6 +179,7 @@ const inMemoryRooms = {
 };
 const inMemoryMessages = {};
 const inMemoryAdmins = {};
+const inMemoryPrivateMessages = [];
 
 // ============================================
 // Online Users Tracking
@@ -155,6 +189,46 @@ const roomUsers = new Map();   // roomName -> Set of socketIds
 const micQueues = new Map();    // roomName -> Array of { socketId, username, color }
 const activeSpeakers = new Map(); // roomName -> { socketId, username, color, expiresAt, timer }
 const micLockedRooms = new Set();  // Set of roomNames with locked mic queues
+
+// ============================================
+// Helper: Compile Stats Data
+// ============================================
+async function getStatsData() {
+  const totalOnline = onlineUsers.size;
+  const roomStats = [];
+  for (const [name, users] of roomUsers.entries()) {
+    roomStats.push({ room: name, count: users.size });
+  }
+
+  let totalMessages = 0;
+  let totalRooms = Object.keys(inMemoryRooms).length;
+
+  if (db) {
+    try {
+      const [[{ count }]] = await db.query('SELECT COUNT(*) as count FROM messages WHERE is_deleted = 0');
+      totalMessages = count;
+      const [[{ rcount }]] = await db.query('SELECT COUNT(*) as rcount FROM rooms WHERE is_active = 1');
+      totalRooms = rcount;
+    } catch (e) {
+      console.error(e);
+    }
+  } else {
+    totalMessages = Object.values(inMemoryMessages).reduce((s, m) => s + m.length, 0);
+  }
+
+  return { totalOnline, totalRooms, totalMessages, roomStats };
+}
+
+async function broadcastAdminStats() {
+  if (io && io.sockets && io.sockets.adapter.rooms.has('super_admins')) {
+    try {
+      const stats = await getStatsData();
+      io.to('super_admins').emit('admin_stats_update', { stats });
+    } catch (e) {
+      console.error('Error broadcasting admin stats:', e);
+    }
+  }
+}
 
 // ============================================
 // Helper: Get Color from Username
@@ -182,6 +256,52 @@ function formatTime(date = new Date()) {
 // ============================================
 // REST API Routes
 // ============================================
+
+// TURN server credentials for WebRTC
+app.get('/api/turn-credentials', (req, res) => {
+  // If the user has set a METERED_API_KEY, use metered.ca for best performance
+  const meteredKey = process.env.METERED_API_KEY;
+  
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // Free TURN servers (relay) - essential for mobile networks
+    {
+      urls: 'turn:a.relay.metered.ca:80',
+      username: 'e8dd65b92f6aee65c3912070',
+      credential: '3TFjp+MFtGLKXHR0'
+    },
+    {
+      urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+      username: 'e8dd65b92f6aee65c3912070',
+      credential: '3TFjp+MFtGLKXHR0'
+    },
+    {
+      urls: 'turn:a.relay.metered.ca:443',
+      username: 'e8dd65b92f6aee65c3912070',
+      credential: '3TFjp+MFtGLKXHR0'
+    },
+    {
+      urls: 'turns:a.relay.metered.ca:443?transport=tcp',
+      username: 'e8dd65b92f6aee65c3912070',
+      credential: '3TFjp+MFtGLKXHR0'
+    }
+  ];
+
+  // If user provided custom TURN credentials via environment
+  if (process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+    iceServers.push({
+      urls: process.env.TURN_URL,
+      username: process.env.TURN_USERNAME,
+      credential: process.env.TURN_CREDENTIAL
+    });
+  }
+
+  res.json({ iceServers });
+});
 
 // Get all rooms
 app.get('/api/rooms', async (req, res) => {
@@ -267,32 +387,232 @@ app.get('/api/messages/:room', async (req, res) => {
   }
 });
 
+// Helper: Check if super admin is valid
+async function isValidSuperAdmin(username, password) {
+  if (!password) return false;
+  const cleanUser = (username || 'admin').trim().toLowerCase();
+
+  if (db) {
+    try {
+      const [adminRows] = await db.query('SELECT password FROM admin_users WHERE username = ?', [cleanUser]);
+      if (adminRows.length > 0) {
+        return password === adminRows[0].password;
+      }
+    } catch (e) {
+      console.error('Error validating super admin from DB:', e);
+    }
+  }
+
+  // Fallback
+  if (cleanUser === 'admin') {
+    return password === (process.env.ADMIN_PASSWORD || 'admin123');
+  }
+
+  return false;
+}
+
+// Admin: Login verification
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+  const isValid = await isValidSuperAdmin(username, password);
+  if (isValid) {
+    res.json({ success: true, username: username || 'admin' });
+  } else {
+    res.status(401).json({ success: false, message: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+  }
+});
+
 // Admin: Get stats
 app.get('/api/admin/stats', async (req, res) => {
-  const { password } = req.query;
-  if (password !== (process.env.ADMIN_PASSWORD || 'admin123')) {
+  const { username, password } = req.query;
+  const isValid = await isValidSuperAdmin(username, password);
+  if (!isValid) {
     return res.status(403).json({ success: false, error: 'غير مصرح' });
   }
-  const totalOnline = onlineUsers.size;
-  const roomStats = [];
-  for (const [name, users] of roomUsers.entries()) {
-    roomStats.push({ room: name, count: users.size });
-  }
   try {
-    let totalMessages = 0;
-    let totalRooms = Object.keys(inMemoryRooms).length;
-    if (db) {
-      const [[{ count }]] = await db.query('SELECT COUNT(*) as count FROM messages WHERE is_deleted = 0');
-      totalMessages = count;
-      const [[{ rcount }]] = await db.query('SELECT COUNT(*) as rcount FROM rooms WHERE is_active = 1');
-      totalRooms = rcount;
-    } else {
-      totalMessages = Object.values(inMemoryMessages).reduce((s, m) => s + m.length, 0);
-    }
-    res.json({ success: true, stats: { totalOnline, totalRooms, totalMessages, roomStats } });
+    const stats = await getStatsData();
+    res.json({ success: true, stats });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// Admin: List all admins
+app.get('/api/admin/list-admins', async (req, res) => {
+  const { username, password } = req.query;
+  const isValid = await isValidSuperAdmin(username, password);
+  if (!isValid) {
+    return res.status(403).json({ success: false, error: 'غير مصرح' });
+  }
+
+  try {
+    if (db) {
+      const [rows] = await db.query('SELECT id, username, created_at FROM admin_users ORDER BY id ASC');
+      res.json({ success: true, admins: rows });
+    } else {
+      res.json({ success: true, admins: [{ id: 1, username: 'admin', created_at: new Date() }] });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Add new admin
+app.post('/api/admin/add-admin', async (req, res) => {
+  const { adminUsername, adminPassword, newUsername, newPassword } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) {
+    return res.status(403).json({ success: false, error: 'غير مصرح' });
+  }
+
+  if (!newUsername || !newPassword) {
+    return res.status(400).json({ success: false, error: 'اسم المستخدم وكلمة المرور مطلوبان' });
+  }
+
+  const cleanUser = newUsername.trim().toLowerCase();
+  if (cleanUser.length < 3 || cleanUser.length > 50) {
+    return res.status(400).json({ success: false, error: 'اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً' });
+  }
+
+  try {
+    if (db) {
+      const [existing] = await db.query('SELECT id FROM admin_users WHERE username = ?', [cleanUser]);
+      if (existing.length > 0) {
+        return res.status(409).json({ success: false, error: 'اسم المستخدم موجود مسبقاً' });
+      }
+      await db.query('INSERT INTO admin_users (username, password) VALUES (?, ?)', [cleanUser, newPassword]);
+      res.json({ success: true, message: 'تم إضافة المسؤول بنجاح' });
+    } else {
+      res.status(501).json({ success: false, error: 'قاعدة البيانات غير متصلة' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Delete admin
+app.post('/api/admin/delete-admin', async (req, res) => {
+  const { adminUsername, adminPassword, targetId } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) {
+    return res.status(403).json({ success: false, error: 'غير مصرح' });
+  }
+
+  try {
+    if (db) {
+      // Find the username of the target
+      const [rows] = await db.query('SELECT username FROM admin_users WHERE id = ?', [targetId]);
+      if (rows.length === 0) {
+        return res.status(444).json({ success: false, error: 'المسؤول غير موجود' });
+      }
+      const targetUser = rows[0].username.toLowerCase();
+      if (targetUser === (adminUsername || 'admin').trim().toLowerCase()) {
+        return res.status(400).json({ success: false, error: 'لا يمكنك حذف حسابك الشخصي النشط' });
+      }
+
+      await db.query('DELETE FROM admin_users WHERE id = ?', [targetId]);
+      res.json({ success: true, message: 'تم حذف المسؤول بنجاح' });
+    } else {
+      res.status(501).json({ success: false, error: 'قاعدة البيانات غير متصلة' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Delete room
+app.post('/api/admin/delete-room', async (req, res) => {
+  const { adminUsername, adminPassword, roomId } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) {
+    return res.status(403).json({ success: false, error: 'غير مصرح' });
+  }
+
+  try {
+    let roomName = '';
+    if (db) {
+      const [rows] = await db.query('SELECT name FROM rooms WHERE id = ?', [roomId]);
+      if (rows.length === 0) {
+        return res.status(444).json({ success: false, error: 'الغرفة غير موجودة' });
+      }
+      roomName = rows[0].name;
+      // Mark room as inactive in database
+      await db.query('UPDATE rooms SET is_active = 0 WHERE id = ?', [roomId]);
+    } else {
+      // Memory fallback
+      const found = Object.values(inMemoryRooms).find(r => r.id === parseInt(roomId));
+      if (!found) {
+        return res.status(444).json({ success: false, error: 'الغرفة غير موجودة' });
+      }
+      roomName = found.name;
+      delete inMemoryRooms[roomName];
+    }
+
+    // Emit kicked to all users inside the room
+    const socketsInRoom = roomUsers.get(roomName);
+    if (socketsInRoom) {
+      for (const sid of socketsInRoom) {
+        const s = io.sockets.sockets.get(sid);
+        if (s) {
+          s.emit('kicked', { message: 'تم إغلاق هذه الغرفة بواسطة الإدارة العامة.' });
+          s.leave(roomName);
+        }
+      }
+      roomUsers.delete(roomName);
+    }
+
+    // Cleanup room state
+    micQueues.delete(roomName);
+    activeSpeakers.delete(roomName);
+    micLockedRooms.delete(roomName);
+
+    // Broadcast updated stats to other admins
+    broadcastAdminStats();
+
+    // Broadcast room list updated to all clients
+    io.emit('room_list_updated');
+
+    res.json({ success: true, message: 'تم حذف الغرفة وطرد المتواجدين بنجاح' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/verify-admin', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username) return res.json({ success: false, message: 'يرجى إدخال اسم المستخدم للمسؤول' });
+
+  const cleanUser = username.trim().toLowerCase();
+  
+  // Check if they are database admin
+  let isDbAdmin = false;
+  let dbAdminPassword = null;
+  if (db) {
+    try {
+      const [adminRows] = await db.query('SELECT password FROM admin_users WHERE username = ?', [cleanUser]);
+      if (adminRows.length > 0) {
+        isDbAdmin = true;
+        dbAdminPassword = adminRows[0].password;
+      }
+    } catch (e) {}
+  }
+
+  if (isDbAdmin) {
+    if (password === dbAdminPassword) {
+      return res.json({ success: true });
+    } else {
+      return res.json({ success: false, message: 'كلمة مرور حساب المسؤول غير صحيحة!' });
+    }
+  } else if (cleanUser === 'admin') {
+    if (password === (process.env.ADMIN_PASSWORD || 'admin123')) {
+      return res.json({ success: true });
+    } else {
+      return res.json({ success: false, message: 'كلمة مرور حساب المسؤول غير صحيحة!' });
+    }
+  }
+
+  // Not an admin account, always success
+  return res.json({ success: true });
 });
 
 // Serve pages
@@ -308,6 +628,21 @@ io.on('connection', (socket) => {
   console.log(`🔌 اتصال جديد: ${socket.id} من ${clientIp}`);
 
   // -----------------------------------------------
+  // SUPER ADMIN AUTH & SOCKET JOIN
+  // -----------------------------------------------
+  socket.on('admin_auth', async ({ username, password }) => {
+    const isValid = await isValidSuperAdmin(username, password);
+    if (isValid) {
+      socket.join('super_admins');
+      const stats = await getStatsData();
+      socket.emit('admin_stats_update', { stats });
+      console.log(`👑 المسؤول الكبير [${username || 'admin'}] اتصل بلوحة الإدارة عبر Socket.io`);
+    } else {
+      socket.emit('admin_auth_failed', { message: 'بيانات غير صحيحة' });
+    }
+  });
+
+  // -----------------------------------------------
   // JOIN ROOM
   // -----------------------------------------------
   socket.on('join_room', async ({ username, room, color, password }) => {
@@ -318,10 +653,39 @@ io.on('connection', (socket) => {
     const userColor = color || getUserColor(cleanUser);
 
     // Admin password security check
-    if (cleanUser.toLowerCase() === 'admin' && password !== (process.env.ADMIN_PASSWORD || 'admin123')) {
+    let isDbAdmin = false;
+    let dbAdminPassword = null;
+    
+    if (db) {
+      try {
+        const [adminRows] = await db.query('SELECT password FROM admin_users WHERE username = ?', [cleanUser.toLowerCase()]);
+        if (adminRows.length > 0) {
+          isDbAdmin = true;
+          dbAdminPassword = adminRows[0].password;
+        }
+      } catch (e) {}
+    }
+
+    if (isDbAdmin) {
+      if (password !== dbAdminPassword) {
+        socket.emit('error_msg', { message: 'كلمة مرور حساب المسؤول غير صحيحة!' });
+        setTimeout(() => socket.disconnect(), 800);
+        return;
+      }
+    } else if (cleanUser.toLowerCase() === 'admin' && password !== (process.env.ADMIN_PASSWORD || 'admin123')) {
       socket.emit('error_msg', { message: 'كلمة مرور حساب المسؤول غير صحيحة!' });
       setTimeout(() => socket.disconnect(), 800);
       return;
+    }
+
+    // Special registered user check for خالد
+    const rawUser = cleanUser.replace(/^\[(عضو|مسجل)\]\s*/, '');
+    if (rawUser === 'خالد') {
+      if (password !== '1234') {
+        socket.emit('error_msg', { message: 'كلمة المرور غير صحيحة لحساب خالد!' });
+        setTimeout(() => socket.disconnect(), 800);
+        return;
+      }
     }
 
     // Check if banned
@@ -409,6 +773,7 @@ io.on('connection', (socket) => {
     }
 
     console.log(`👤 ${cleanUser} انضم إلى غرفة: ${cleanRoom}`);
+    broadcastAdminStats();
   });
 
   // -----------------------------------------------
@@ -450,6 +815,7 @@ io.on('connection', (socket) => {
         inMemoryMessages[user.room] = inMemoryMessages[user.room].slice(-200);
       }
     }
+    broadcastAdminStats();
   });
 
   // -----------------------------------------------
@@ -545,6 +911,72 @@ io.on('connection', (socket) => {
       time: formatTime(),
       type: 'system'
     });
+  });
+
+  // -----------------------------------------------
+  // UNBAN USER (Admin only)
+  // -----------------------------------------------
+  socket.on('unban_user', async ({ targetUsername }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const isAdmin = await checkIsAdmin(user.username, user.room);
+    if (!isAdmin) {
+      socket.emit('error_msg', { message: 'ليس لديك صلاحية لرفع الحظر' });
+      return;
+    }
+
+    const cleanTarget = targetUsername.trim();
+    if (db) {
+      try {
+        const [roomRow] = await db.query('SELECT id FROM rooms WHERE name = ?', [user.room]);
+        if (roomRow.length > 0) {
+          await db.query(
+            'DELETE FROM banned_users WHERE room_id = ? AND username = ?',
+            [roomRow[0].id, cleanTarget]
+          );
+        }
+      } catch (e) {}
+    }
+
+    io.to(user.room).emit('new_message', {
+      id: uuidv4(),
+      username: 'النظام',
+      color: '#4caf50',
+      message: `تم رفع الحظر عن ${cleanTarget} بواسطة المشرف ${user.username}`,
+      time: formatTime(),
+      type: 'system'
+    });
+  });
+
+  // -----------------------------------------------
+  // GET BANNED USERS (Admin only)
+  // -----------------------------------------------
+  socket.on('get_banned_users', async () => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const isAdmin = await checkIsAdmin(user.username, user.room);
+    if (!isAdmin) return;
+
+    if (db) {
+      try {
+        const [roomRow] = await db.query('SELECT id FROM rooms WHERE name = ?', [user.room]);
+        if (roomRow.length > 0) {
+          const [banned] = await db.query(
+            'SELECT username, reason, banned_by, created_at FROM banned_users WHERE room_id = ? ORDER BY created_at DESC',
+            [roomRow[0].id]
+          );
+          socket.emit('banned_users_list', { banned });
+        } else {
+          socket.emit('banned_users_list', { banned: [] });
+        }
+      } catch (e) {
+        socket.emit('banned_users_list', { banned: [] });
+      }
+    } else {
+      socket.emit('banned_users_list', { banned: [] });
+    }
   });
 
   // -----------------------------------------------
@@ -645,6 +1077,7 @@ io.on('connection', (socket) => {
       leaveMic(socket, user.room);
 
       console.log(`👋 ${user.username} غادر الغرفة: ${user.room}`);
+      broadcastAdminStats();
     }
   });
 
@@ -797,6 +1230,100 @@ io.on('connection', (socket) => {
     socket.to(voiceRoom).emit('voice_speaking', { username: user.username, speaking });
   });
 
+  // -----------------------------------------------
+  // PRIVATE CHAT (DM) EVENTS
+  // -----------------------------------------------
+  socket.on('send_private_message', async ({ to, message }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user || !message || !to) return;
+
+    const cleanMsg = message.trim().substring(0, 1000);
+    if (!cleanMsg) return;
+
+    const targetSocket = findSocketByUsername(to);
+    
+    // Save to DB if connected
+    if (db) {
+      try {
+        await db.query(
+          'INSERT INTO private_messages (sender, receiver, message) VALUES (?, ?, ?)',
+          [user.username, to, cleanMsg]
+        );
+      } catch (e) {
+        console.error('Error saving private message to DB:', e);
+      }
+    } else {
+      // In memory fallback
+      inMemoryPrivateMessages.push({
+        sender: user.username,
+        receiver: to,
+        message: cleanMsg,
+        created_at: new Date()
+      });
+      if (inMemoryPrivateMessages.length > 1000) {
+        inMemoryPrivateMessages.shift();
+      }
+    }
+
+    const msgData = {
+      sender: user.username,
+      receiver: to,
+      message: cleanMsg,
+      time: formatTime(),
+      color: user.color
+    };
+
+    // Emit to receiver if online
+    if (targetSocket) {
+      io.to(targetSocket).emit('new_private_message', msgData);
+    }
+    
+    // Emit confirmation back to sender
+    socket.emit('private_message_sent', msgData);
+  });
+
+  socket.on('get_private_history', async ({ withUser }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user || !withUser) return;
+
+    try {
+      let messages = [];
+      if (db) {
+        const [rows] = await db.query(
+          `SELECT sender, receiver, message, created_at 
+           FROM private_messages 
+           WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+           ORDER BY created_at DESC LIMIT 50`,
+          [user.username, withUser, withUser, user.username]
+        );
+        messages = rows.reverse().map(r => ({
+          sender: r.sender,
+          receiver: r.receiver,
+          message: r.message,
+          time: formatTime(new Date(r.created_at)),
+          color: getUserColor(r.sender)
+        }));
+      } else {
+        const rows = inMemoryPrivateMessages.filter(m => 
+          (m.sender === user.username && m.receiver === withUser) ||
+          (m.sender === withUser && m.receiver === user.username)
+        ).slice(-50);
+        messages = rows.map(r => ({
+          sender: r.sender,
+          receiver: r.receiver,
+          message: r.message,
+          time: formatTime(r.created_at),
+          color: getUserColor(r.sender)
+        }));
+      }
+
+      socket.emit('private_history', { withUser, messages });
+    } catch (e) {
+      console.error('Error fetching private history:', e);
+      socket.emit('private_history', { withUser, messages: [] });
+    }
+  });
+
 });
 
 // ============================================
@@ -821,9 +1348,11 @@ function findSocketByUsername(targetUsername) {
 }
 
 async function checkIsAdmin(username, roomName) {
-  if (username === 'admin') return true;
   if (db) {
     try {
+      const [adminUsersRow] = await db.query('SELECT id FROM admin_users WHERE username = ?', [username.toLowerCase()]);
+      if (adminUsersRow.length > 0) return true;
+
       const [roomRow] = await db.query('SELECT id FROM rooms WHERE name = ?', [roomName]);
       if (roomRow.length === 0) return false;
       const [adminRow] = await db.query(
@@ -835,6 +1364,7 @@ async function checkIsAdmin(username, roomName) {
       return false;
     }
   } else {
+    if (username === 'admin') return true;
     return (inMemoryAdmins[roomName] || []).includes(username);
   }
 }
