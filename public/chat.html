@@ -594,6 +594,91 @@
     .menu-dropdown-item.danger:hover {
       background: #ffebee;
     }
+
+    /* =========== PRIVATE CHAT CSS =========== */
+    .panel-tabs {
+      display: flex;
+      border-bottom: 2px solid #eee;
+      background: #fafafa;
+      flex-shrink: 0;
+    }
+    .panel-tab {
+      flex: 1;
+      padding: 12px 6px;
+      border: none;
+      background: none;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px;
+      font-weight: bold;
+      color: #666;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .panel-tab.active {
+      color: #1565c0;
+      border-bottom-color: #1565c0;
+      background: #fff;
+    }
+    .panel-tab:hover:not(.active) {
+      background: #f0f0f0;
+    }
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .badge {
+      background: #e53935;
+      color: #fff;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 10px;
+      min-width: 16px;
+      text-align: center;
+    }
+    .private-chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(135deg, #1565c0, #0d47a1);
+      color: #fff;
+      padding: 8px 12px;
+      font-family: 'Tajawal', sans-serif;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+    }
+    .pavatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 13px;
+    }
+    .pback-btn {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    .pback-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
   </style>
 </head>
 <body>
@@ -603,6 +688,7 @@
 
 <!-- Context Menu -->
 <div class="ctxm" id="ctxm">
+  <div class="ctxi" id="ctxPrivate" style="font-weight: bold; color: #1565c0;">💬 مراسلة خاصة</div>
   <div class="ctxi" id="ctxKick">🚫 طرد من الغرفة</div>
   <div class="ctxi danger" id="ctxBan">🔨 حظر</div>
   <div class="ctxi" id="ctxAdmin">👑 تعيين مشرف</div>
@@ -637,7 +723,19 @@
 
   <!-- LEFT: Users Panel -->
   <div class="users-panel" id="usersPanel">
-    <!-- filled by JS -->
+    <div class="panel-tabs">
+      <button class="panel-tab active" id="tabOnlineUsers" onclick="switchPanelTab('online')">👥 المتصلون</button>
+      <button class="panel-tab" id="tabPrivateChats" onclick="switchPanelTab('private')">
+        💬 الخاص
+        <span class="badge" id="privateBadge" style="display: none;">0</span>
+      </button>
+    </div>
+    <div class="panel-content active" id="onlineUsersList" style="display: block;">
+      <!-- filled by JS -->
+    </div>
+    <div class="panel-content" id="privateChatsList" style="display: none;">
+      <!-- filled by JS -->
+    </div>
   </div>
 
   <!-- RIGHT: Chat Panel -->
@@ -656,7 +754,18 @@
       <marquee id="announcementText" behavior="scroll" direction="right" scrollamount="4"></marquee>
       <button class="announcement-close" onclick="closeAnnouncementBanner()">✕</button>
     </div>
+    
+    <!-- Private Chat Header -->
+    <div class="private-chat-header" id="privateChatHeader" style="display: none;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="pavatar" id="privateChatAvatar"></div>
+        <span id="privateChatTitle" style="font-weight: bold; font-size: 15px;"></span>
+      </div>
+      <button class="pback-btn" onclick="switchToPublicChat()">عودة للعامة ↩️</button>
+    </div>
+    
     <div class="msgs" id="msgs"></div>
+    <div class="msgs" id="msgsPrivate" style="display: none;"></div>
     <div class="typing-bar" id="typBar" style="display:none">
       <div class="td"></div><div class="td"></div><div class="td"></div>
       <span id="typText"></span>
@@ -896,6 +1005,235 @@ socket.on('announcement_updated', ({ text }) => {
 });
 
 /* ===================================================
+   PRIVATE CHAT SYSTEM
+=================================================== */
+let currentChatMode = 'public'; // 'public' or 'private'
+let activePrivateUser = null;   // username of the active private chat partner
+let privateChats = {};          // username -> { messages: [], unreadCount: 0, color: '' }
+
+// Tab switching inside users panel
+function switchPanelTab(tab) {
+  const tabOnline = document.getElementById('tabOnlineUsers');
+  const tabPrivate = document.getElementById('tabPrivateChats');
+  const listOnline = document.getElementById('onlineUsersList');
+  const listPrivate = document.getElementById('privateChatsList');
+  
+  if (tab === 'online') {
+    tabOnline.classList.add('active');
+    tabPrivate.classList.remove('active');
+    listOnline.style.display = 'block';
+    listPrivate.style.display = 'none';
+  } else {
+    tabOnline.classList.remove('active');
+    tabPrivate.classList.add('active');
+    listOnline.style.display = 'none';
+    listPrivate.style.display = 'block';
+    renderPrivateChatsList();
+  }
+}
+
+// Render private chats list in side panel
+function renderPrivateChatsList() {
+  const container = document.getElementById('privateChatsList');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const activeUsers = Object.keys(privateChats);
+  if (activeUsers.length === 0) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">لا توجد محادثات خاصة</div>';
+    return;
+  }
+  
+  activeUsers.forEach(u => {
+    const info = privateChats[u];
+    const clr = info.color || nc(u);
+    const badge = info.unreadCount > 0 ? `<span class="badge">${info.unreadCount}</span>` : '';
+    
+    const row = document.createElement('div');
+    row.className = 'user-row';
+    row.innerHTML = `
+      <div class="ua" style="background:${clr}">${u[0]}</div>
+      <span class="un" style="color:${clr}; flex: 1;">${esc(u)}</span>
+      ${badge}
+    `;
+    row.onclick = () => {
+      startPrivateChat(u);
+    };
+    container.appendChild(row);
+  });
+}
+
+// Update the badge count of total unread messages
+function updatePrivateBadge() {
+  let totalUnread = 0;
+  Object.values(privateChats).forEach(c => {
+    totalUnread += c.unreadCount;
+  });
+  
+  const badge = document.getElementById('privateBadge');
+  if (badge) {
+    if (totalUnread > 0) {
+      badge.textContent = totalUnread;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+// Start/switch to a private chat
+function startPrivateChat(u) {
+  if (u === username) return;
+  
+  if (!privateChats[u]) {
+    privateChats[u] = { messages: [], unreadCount: 0, color: nc(u) };
+  }
+  
+  currentChatMode = 'private';
+  activePrivateUser = u;
+  
+  // Clear unread count for this user
+  privateChats[u].unreadCount = 0;
+  updatePrivateBadge();
+  
+  // Set header display
+  document.getElementById('privateChatHeader').style.display = 'flex';
+  const avatar = document.getElementById('privateChatAvatar');
+  avatar.textContent = u[0];
+  avatar.style.background = privateChats[u].color;
+  document.getElementById('privateChatTitle').textContent = `محادثة خاصة مع ${u}`;
+  
+  // Toggle visible message boxes
+  document.getElementById('msgs').style.display = 'none';
+  document.getElementById('msgsPrivate').style.display = 'block';
+  
+  // Request latest history from server to sync
+  socket.emit('get_private_history', { withUser: u });
+  
+  // Close the sidebar panel on mobile
+  toggleUsers(false);
+}
+
+// Switch back to public chat
+function switchToPublicChat() {
+  currentChatMode = 'public';
+  activePrivateUser = null;
+  
+  document.getElementById('privateChatHeader').style.display = 'none';
+  document.getElementById('msgsPrivate').style.display = 'none';
+  document.getElementById('msgs').style.display = 'block';
+  
+  scrollDown();
+}
+
+// Render private messages to DOM
+function renderPrivateMessages() {
+  const box = document.getElementById('msgsPrivate');
+  if (!box) return;
+  box.innerHTML = '';
+  
+  const messages = privateChats[activePrivateUser].messages;
+  messages.forEach(m => {
+    addPrivateMsgToDOM(m);
+  });
+  
+  box.scrollTop = box.scrollHeight;
+}
+
+// Add a private message row to private message box
+function addPrivateMsgToDOM(m) {
+  const box = document.getElementById('msgsPrivate');
+  if (!box) return;
+  const isMe = m.sender === username;
+  const displayName = isMe ? `${m.sender} (أنت)` : m.sender;
+  const clr = m.color || nc(m.sender);
+  const tclr = tc(m.sender);
+  const isKh = isKhalid(m.sender);
+  
+  const row = document.createElement('div');
+  row.className = 'mrow';
+  row.innerHTML = `
+    <div class="mrow-hdr">
+      <span class="mrow-name" style="color:${clr}">
+        ${isKh ? '<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">' : ''}
+        ${esc(displayName)}
+      </span>
+      <span class="mrow-time">${m.time || ft()}</span>
+    </div>
+    <div class="mrow-text" style="color:${isMe ? clr : tclr}">${fmsg(m.message)}</div>
+  `;
+  
+  if (!isMe) {
+    row.addEventListener('contextmenu', e => showCtx(e, m.sender));
+    row.addEventListener('click', e => showCtx(e, m.sender));
+  }
+  box.appendChild(row);
+}
+
+// Socket private chat event listeners
+socket.on('new_private_message', m => {
+  const fromUser = m.sender;
+  
+  if (!privateChats[fromUser]) {
+    privateChats[fromUser] = { messages: [], unreadCount: 0, color: m.color || nc(fromUser) };
+  }
+  
+  privateChats[fromUser].messages.push(m);
+  
+  if (currentChatMode === 'private' && activePrivateUser === fromUser) {
+    addPrivateMsgToDOM(m);
+    document.getElementById('msgsPrivate').scrollTop = document.getElementById('msgsPrivate').scrollHeight;
+  } else {
+    privateChats[fromUser].unreadCount++;
+    updatePrivateBadge();
+    toast(`💬 رسالة خاصة جديدة من ${fromUser}`);
+    
+    // Play alert sound if wanted
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    } catch(e) {}
+    
+    if (document.getElementById('privateChatsList').style.display !== 'none') {
+      renderPrivateChatsList();
+    }
+  }
+});
+
+socket.on('private_message_sent', m => {
+  const toUser = m.receiver;
+  
+  if (!privateChats[toUser]) {
+    privateChats[toUser] = { messages: [], unreadCount: 0, color: m.color || nc(toUser) };
+  }
+  
+  privateChats[toUser].messages.push(m);
+  
+  if (currentChatMode === 'private' && activePrivateUser === toUser) {
+    addPrivateMsgToDOM(m);
+    document.getElementById('msgsPrivate').scrollTop = document.getElementById('msgsPrivate').scrollHeight;
+  }
+});
+
+socket.on('private_history', ({ withUser, messages }) => {
+  if (!privateChats[withUser]) {
+    privateChats[withUser] = { messages: [], unreadCount: 0, color: nc(withUser) };
+  }
+  privateChats[withUser].messages = messages;
+  
+  if (currentChatMode === 'private' && activePrivateUser === withUser) {
+    renderPrivateMessages();
+  }
+});
+
+/* ===================================================
    USERS PANEL
 =================================================== */
 let chatUsers=[];
@@ -904,7 +1242,8 @@ let ctxTarget=null;
 
 function renderUsers(users){
   chatUsers=users;
-  const p=document.getElementById('usersPanel');
+  const p=document.getElementById('onlineUsersList');
+  if (!p) return;
   p.innerHTML='';
   if(!users.length){
     p.innerHTML='<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">لا يوجد متصلون</div>';
@@ -942,7 +1281,7 @@ function renderUsers(users){
       </span>
       <span class="ui" style="font-size:13px; font-weight:bold; color:#e09610">${icon}</span>
     `;
-    if(!isMe&&isAdmin){
+    if(!isMe){
       row.addEventListener('contextmenu',e=>showCtx(e,u.username));
       row.addEventListener('click',e=>showCtx(e,u.username));
     }
@@ -986,7 +1325,10 @@ function addMsg(d){
     </div>
     <div class="mrow-text" style="color:${isMe?clr:tclr}">${fmsg(d.message)}</div>
   `;
-  if(!isMe&&isAdmin) row.addEventListener('contextmenu',e=>showCtx(e,d.username));
+  if(!isMe){
+    row.addEventListener('contextmenu',e=>showCtx(e,d.username));
+    row.addEventListener('click',e=>showCtx(e,d.username));
+  }
   box.appendChild(row);
   scrollDown();
 }
@@ -1014,7 +1356,11 @@ let typTimer=null,isTyping=false;
 function sendMsg(){
   const msg=inp.value.trim();
   if(!msg)return;
-  socket.emit('send_message',{message:msg});
+  if (currentChatMode === 'private') {
+    socket.emit('send_private_message', { to: activePrivateUser, message: msg });
+  } else {
+    socket.emit('send_message',{message:msg});
+  }
   inp.value='';stopTyp();closeEmoji();
 }
 inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}});
@@ -1407,6 +1753,12 @@ function showCtx(e,user){
   e.stopPropagation();
   ctxTarget=user;
   const m=document.getElementById('ctxm');
+  
+  // Show admin items only if current user is admin
+  document.getElementById('ctxKick').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('ctxBan').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('ctxAdmin').style.display = isAdmin ? 'flex' : 'none';
+  
   m.style.top=e.clientY+'px';m.style.right=(window.innerWidth-e.clientX)+'px';m.style.left='auto';
   m.classList.add('open');
 }
@@ -1414,6 +1766,7 @@ document.addEventListener('click',()=>document.getElementById('ctxm').classList.
 document.getElementById('ctxKick').onclick=()=>{if(ctxTarget&&confirm(`طرد ${ctxTarget}؟`))socket.emit('kick_user',{targetUsername:ctxTarget})};
 document.getElementById('ctxBan').onclick=()=>{if(ctxTarget){const r=prompt('سبب الحظر:');socket.emit('ban_user',{targetUsername:ctxTarget,reason:r||'لا يوجد سبب'})}};
 document.getElementById('ctxAdmin').onclick=()=>{if(ctxTarget&&confirm(`تعيين ${ctxTarget} مشرفاً؟`))socket.emit('make_admin',{targetUsername:ctxTarget})};
+document.getElementById('ctxPrivate').onclick=()=>{if(ctxTarget)startPrivateChat(ctxTarget)};
 
 let isMicLocked = false;
 
