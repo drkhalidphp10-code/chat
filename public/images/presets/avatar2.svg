@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#e91e63"/>
+  <circle cx="50" cy="50" r="38" fill="#ffffff"/>
+  <!-- Hair back -->
+  <circle cx="50" cy="30" r="14" fill="#3e2723"/>
+  <!-- Face -->
+  <circle cx="50" cy="53" r="21" fill="#ffdbac"/>
+  <!-- Hair front -->
+  <path d="M29 50 C 29 30, 71 30, 71 50 C 71 40, 65 36, 50 36 C 35 36, 29 40, 29 50 Z" fill="#3e2723"/>
+  <!-- Eyes -->
+  <ellipse cx="42" cy="52" rx="2" ry="3" fill="#3e2723"/>
+  <ellipse cx="58" cy="52" rx="2" ry="3" fill="#3e2723"/>
+  <path d="M39 47 Q 42 45, 45 47" fill="none" stroke="#3e2723" stroke-width="1.5"/>
+  <path d="M55 47 Q 58 45, 61 47" fill="none" stroke="#3e2723" stroke-width="1.5"/>
+  <!-- Blush -->
+  <circle cx="37" cy="57" r="2.5" fill="#ff8a80" opacity="0.6"/>
+  <circle cx="63" cy="57" r="2.5" fill="#ff8a80" opacity="0.6"/>
+  <!-- Smile -->
+  <path d="M46 61 Q 50 66, 54 61" fill="none" stroke="#3e2723" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Clothes -->
+  <path d="M33 72 C 33 72, 35 88, 50 88 C 65 88, 67 72, 67 72 Z" fill="#9c27b0"/>
+  <path d="M46 72 Q 50 76, 54 72" fill="#ffdbac"/>
+  <!-- Hair bows/clips -->
+  <circle cx="38" cy="36" r="3" fill="#ffeb3b"/>
+  <circle cx="62" cy="36" r="3" fill="#ffeb3b"/>
+</svg>

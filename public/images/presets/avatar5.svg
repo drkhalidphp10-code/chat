@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#ffd700"/>
+  <circle cx="50" cy="50" r="38" fill="#111111"/>
+  <!-- Glow behind crown -->
+  <circle cx="50" cy="52" r="24" fill="#ffd700" opacity="0.15" style="filter: blur(4px);"/>
+  <!-- Crown -->
+  <path d="M26 66 L 22 40 L 38 52 L 50 32 L 62 52 L 78 40 L 74 66 Z" fill="url(#goldGrad)" stroke="#ffffff" stroke-width="1.5"/>
+  <!-- Crown base details -->
+  <rect x="28" y="62" width="44" height="4" fill="#d4af37" rx="1"/>
+  <!-- Jewels on crown points -->
+  <circle cx="22" cy="38" r="2.5" fill="#e91e63"/>
+  <circle cx="38" cy="50" r="2" fill="#00e5ff"/>
+  <circle cx="50" cy="30" r="3" fill="#e91e63"/>
+  <circle cx="62" cy="50" r="2" fill="#00e5ff"/>
+  <circle cx="78" cy="38" r="2.5" fill="#e91e63"/>
+  <!-- Jewels on base -->
+  <circle cx="34" cy="64" r="1" fill="#ffffff"/>
+  <circle cx="42" cy="64" r="1.2" fill="#00e5ff"/>
+  <circle cx="50" cy="64" r="1.5" fill="#e91e63"/>
+  <circle cx="58" cy="64" r="1.2" fill="#00e5ff"/>
+  <circle cx="66" cy="64" r="1" fill="#ffffff"/>
+
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe259"/>
+      <stop offset="100%" stop-color="#ffa751"/>
+    </linearGradient>
+  </defs>
+</svg>

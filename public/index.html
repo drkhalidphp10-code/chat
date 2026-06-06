@@ -440,6 +440,40 @@
           <span class="input-arrow">▼</span>
         </div>
 
+        <!-- Avatar Selector Section -->
+        <div class="avatar-selector-section" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 13px; font-weight: bold; color: #555; text-align: right;">الصورة الشخصية:</span>
+          
+          <div class="avatars-row" style="display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 4px 0; direction: rtl;">
+            <!-- Hidden file input -->
+            <input type="file" id="customAvatarInput" accept="image/*" style="display: none;" onchange="handleCustomAvatarUpload(event)">
+            
+            <!-- Custom Upload Option -->
+            <div class="avatar-option upload-btn" onclick="document.getElementById('customAvatarInput').click()" style="width: 42px; height: 42px; border-radius: 50%; border: 2px dashed #d2325c; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; background: #fff8fa; transition: all 0.2s;" title="رفع صورة مخصصة">
+              📷
+            </div>
+            
+            <!-- Selected custom avatar preview (hidden by default) -->
+            <div id="customAvatarPreview" class="avatar-option" onclick="selectAvatar(this, selectedAvatarUrl)" style="display: none; width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative;">
+              <div class="delete-custom-avatar" onclick="removeCustomAvatar(event)" style="position: absolute; top: -4px; right: -4px; width: 15px; height: 15px; border-radius: 50%; background: #d2325c; color: white; font-size: 9px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; border: 1px solid white;">✕</div>
+            </div>
+
+            <!-- Default option (no avatar, uses initials) -->
+            <div class="avatar-option preset active" onclick="selectAvatar(this, '')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid #d2325c; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #fff; background: #9c27b0; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;">
+              افتراضي
+            </div>
+            
+            <!-- 6 presets (SVG icons) -->
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/presets/avatar1.svg')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/presets/avatar1.svg'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"></div>
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/presets/avatar2.svg')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/presets/avatar2.svg'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"></div>
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/presets/avatar3.svg')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/presets/avatar3.svg'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"></div>
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/presets/avatar4.svg')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/presets/avatar4.svg'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"></div>
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/presets/avatar5.svg')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/presets/avatar5.svg'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"></div>
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/presets/avatar6.svg')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/presets/avatar6.svg'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"></div>
+            <div class="avatar-option preset" onclick="selectAvatar(this, '/images/master_gold_shield.png')" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; background-image: url('/images/master_gold_shield.png'); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;" title="درع ماستر"></div>
+          </div>
+        </div>
+
         <!-- Password Input (hidden for Visitor, shown for Member/Registered) -->
         <div class="input-wrapper" id="passwordWrapper" style="display: none;">
           <span class="input-icon">🔑</span>
@@ -705,6 +739,7 @@
       // Store credentials and redirect
       sessionStorage.setItem('chatUsername', name);
       sessionStorage.setItem('chatRoom', selectedRoom.name);
+      sessionStorage.setItem('chatAvatar', selectedAvatarUrl || '');
       
       // Set distinct colors based on tab type
       let userColor = '#e53935'; // default red
@@ -717,6 +752,97 @@
       sessionStorage.setItem('chatPassword', password);
 
       window.location.href = '/chat';
+    }
+
+    let selectedAvatarUrl = '';
+
+    function selectAvatar(element, url) {
+      // De-select all avatar options
+      document.querySelectorAll('.avatar-option').forEach(el => {
+        el.style.borderColor = 'transparent';
+        el.classList.remove('active');
+      });
+      
+      // Select the clicked one
+      element.style.borderColor = '#d2325c';
+      element.classList.add('active');
+      selectedAvatarUrl = url;
+    }
+
+    function handleCustomAvatarUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // Resize client-side using canvas
+          const canvas = document.createElement('canvas');
+          const max_size = 120;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > max_size) {
+              height *= max_size / width;
+              width = max_size;
+            }
+          } else {
+            if (height > max_size) {
+              width *= max_size / height;
+              height = max_size;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const resizedBase64 = canvas.toDataURL('image/png');
+          
+          // Upload to server
+          fetch('/api/upload-avatar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: resizedBase64 })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              const preview = document.getElementById('customAvatarPreview');
+              preview.style.backgroundImage = `url('${data.url}')`;
+              preview.style.display = 'block';
+              selectAvatar(preview, data.url);
+            } else {
+              showDialogError('فشل رفع الصورة الشخصية المخصصة');
+            }
+          })
+          .catch(err => {
+            console.error('Error uploading avatar:', err);
+            showDialogError('خطأ أثناء الاتصال بالخادم لرفع الصورة');
+          });
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeCustomAvatar(event) {
+      event.stopPropagation();
+      const preview = document.getElementById('customAvatarPreview');
+      preview.style.display = 'none';
+      preview.style.backgroundImage = '';
+      
+      // Fallback to default avatar (first option)
+      const defaultOption = document.querySelector('.avatar-option.preset');
+      if (defaultOption) {
+        selectAvatar(defaultOption, '');
+      }
+      
+      // Clear file input
+      document.getElementById('customAvatarInput').value = '';
     }
 
     function showDialogError(msg) {

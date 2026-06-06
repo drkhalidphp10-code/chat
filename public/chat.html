@@ -23,6 +23,38 @@
       to { filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.8)); }
     }
 
+    .master-badge {
+      width: 20px;
+      height: 20px;
+      vertical-align: middle;
+      margin-left: 6px;
+      margin-right: 2px;
+      display: inline-block;
+      animation: master-glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes master-glow {
+      from { filter: drop-shadow(0 0 2px rgba(255, 170, 0, 0.5)); }
+      to { filter: drop-shadow(0 0 7px rgba(255, 170, 0, 0.9)); }
+    }
+
+    .admin-name-highlight {
+      font-weight: 800;
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: linear-gradient(-45deg, #ff007f, #7c2ae8, #00c6ff, #00ff87);
+      background-size: 300% 300%;
+      animation: gradient-bg-animation 5s ease infinite;
+      color: #ffffff !important;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      box-shadow: 0 0 6px rgba(124, 42, 232, 0.4);
+    }
+    @keyframes gradient-bg-animation {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     body{
       font-family:'Tajawal',sans-serif;
       background:#e0e0e0;
@@ -691,6 +723,53 @@
       background: #ffebee;
       color: #c62828;
     }
+
+    /* =========== ROYAL WELCOME EFFECT =========== */
+    .royal-banner {
+      position: fixed;
+      top: 25%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: linear-gradient(135deg, #d4af37, #f3e5ab, #aa7c11, #d4af37);
+      color: #7a580a;
+      padding: 16px 36px;
+      border-radius: 14px;
+      box-shadow: 0 10px 35px rgba(212, 175, 55, 0.6), inset 0 0 8px rgba(255,255,255,0.6);
+      border: 3px solid #d4af37;
+      text-align: center;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-family: 'Tajawal', sans-serif;
+    }
+    .royal-banner.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      animation: golden-glow 2s infinite alternate;
+    }
+    @keyframes golden-glow {
+      from { box-shadow: 0 10px 35px rgba(212, 175, 55, 0.6); }
+      to { box-shadow: 0 12px 50px rgba(255, 223, 0, 0.9); }
+    }
+    .royal-title {
+      font-size: 12px;
+      font-weight: 900;
+      color: #7a580a;
+      text-shadow: 0 1px 1px rgba(255,255,255,0.8);
+      letter-spacing: 1.5px;
+      margin-bottom: 6px;
+    }
+    .royal-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: #5a3c00;
+      text-shadow: 0 1px 2px rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
@@ -895,6 +974,29 @@ function isKhalid(name) {
   const raw = name.replace(/^\[(عضو|مسجل)\]\s*/, '');
   return raw === 'خالد';
 }
+
+function getUserBadgeHtml(name) {
+  if (!name) return '';
+  const raw = name.replace(/^\[(عضو|مسجل)\]\s*/, '').trim();
+  if (raw === 'خالد') {
+    return `<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">`;
+  }
+  if (raw.toLowerCase() === 'admin') {
+    return `<img src="/images/master_gold_shield.png" class="master-badge" alt="Master">`;
+  }
+  return '';
+}
+
+function getUserNameHtml(username, displayNameToRender) {
+  if (!username) return '';
+  const raw = username.replace(/^\[(عضو|مسجل)\]\s*/, '').trim();
+  const nameToUse = displayNameToRender || username;
+  const escaped = esc(nameToUse);
+  if (raw.toLowerCase() === 'admin') {
+    return `<span class="admin-name-highlight">${escaped}</span>`;
+  }
+  return escaped;
+}
 const myColor  = sessionStorage.getItem('chatColor') || '#e53935';
 let activeSpeaker = null;
 
@@ -905,7 +1007,8 @@ function updateHeaderDisplay() {
   if (!roomEl) return;
   if (activeSpeaker && activeSpeaker.username) {
     const isKh = isKhalid(activeSpeaker.username);
-    roomEl.textContent = `${room} - المتحدث: ${isKh ? '👑 ' : ''}${activeSpeaker.username}`;
+    const isAdmin = activeSpeaker.username.replace(/^\[(عضو|مسجل)\]\s*/, '').toLowerCase() === 'admin';
+    roomEl.textContent = `${room} - المتحدث: ${isKh ? '👑 ' : (isAdmin ? '🛡️ ' : '')}${activeSpeaker.username}`;
   } else {
     roomEl.textContent = room;
   }
@@ -931,12 +1034,14 @@ const socket = io({ transports:['websocket','polling'] });
 
 socket.on('connect',()=>{
   const password = sessionStorage.getItem('chatPassword') || '';
-  socket.emit('join_room',{username,room,color:myColor,password});
+  const avatar = sessionStorage.getItem('chatAvatar') || '';
+  socket.emit('join_room',{username,room,color:myColor,password,avatar});
 });
 socket.on('disconnect',()=>toast('انقطع الاتصال...',true));
 socket.on('reconnect',()=>{
   const password = sessionStorage.getItem('chatPassword') || '';
-  socket.emit('join_room',{username,room,color:myColor,password});
+  const avatar = sessionStorage.getItem('chatAvatar') || '';
+  socket.emit('join_room',{username,room,color:myColor,password,avatar});
 });
 
 socket.on('joined_room', d=>{
@@ -976,10 +1081,21 @@ socket.on('joined_room', d=>{
     }
   }
   renderUsers(chatUsers);
+  
+  const isMeVip = isKhalid(d.username) || d.isAdmin;
+  if (isMeVip) {
+    if (!window.hasTriggeredMeRoyal) {
+      window.hasTriggeredMeRoyal = true;
+      triggerRoyalEntry(d.username);
+    }
+  }
 });
 socket.on('user_joined', d=>{
   renderUsers(d.users||[]);
   sysMsg(`${d.username} انضم للغرفة 👋`);
+  if (d.isVip) {
+    triggerRoyalEntry(d.username);
+  }
 });
 socket.on('user_left', d=>{
   renderUsers(d.users||[]);
@@ -1064,11 +1180,21 @@ function renderPrivateChatsList() {
     const clr = info.color || nc(u);
     const badge = info.unreadCount > 0 ? `<span class="badge">${info.unreadCount}</span>` : '';
     
+    const onlineUser = chatUsers.find(x => x.username === u);
+    const userAvatar = onlineUser ? onlineUser.avatar : (info.avatar || '');
+    const avatarStyle = userAvatar 
+      ? `background-image: url('${userAvatar}'); background-size: cover; background-position: center; border: 1px solid rgba(0,0,0,0.1);`
+      : `background:${clr}`;
+    const avatarContent = userAvatar ? '' : u[0];
+
     const row = document.createElement('div');
     row.className = 'user-row';
     row.innerHTML = `
-      <div class="ua" style="background:${clr}">${u[0]}</div>
-      <span class="un" style="color:${clr}; flex: 1;">${esc(u)}</span>
+      <div class="ua" style="${avatarStyle}">${avatarContent}</div>
+      <span class="un" style="color:${clr}; flex: 1;">
+        ${getUserBadgeHtml(u)}
+        ${getUserNameHtml(u)}
+      </span>
       ${badge}
       <span class="pclose-btn" title="إغلاق المحادثة">✕</span>
     `;
@@ -1184,17 +1310,30 @@ function addPrivateMsgToDOM(m) {
   const tclr = tc(m.sender);
   const isKh = isKhalid(m.sender);
   
+  // Find sender avatar
+  const onlineUser = chatUsers.find(x => x.username === m.sender);
+  const avatarUrl = m.avatar || (onlineUser ? onlineUser.avatar : '');
+  const avatarStyle = avatarUrl 
+    ? `background-image: url('${avatarUrl}'); background-size: cover; background-position: center;`
+    : `background:${clr}`;
+  const avatarContent = avatarUrl ? '' : m.sender[0];
+
   const row = document.createElement('div');
   row.className = 'mrow';
   row.innerHTML = `
-    <div class="mrow-hdr">
-      <span class="mrow-name" style="color:${clr}">
-        ${isKh ? '<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">' : ''}
-        ${esc(displayName)}
-      </span>
-      <span class="mrow-time">${m.time || ft()}</span>
+    <div style="display: flex; gap: 10px; align-items: flex-start; direction: rtl;">
+      <div class="ua" style="${avatarStyle}; width: 34px; height: 34px; border-radius: 50%; font-size: 14px; font-weight: 800; color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.2); flex-shrink: 0;">${avatarContent}</div>
+      <div style="flex: 1; min-width: 0; text-align: right;">
+        <div class="mrow-hdr">
+          <span class="mrow-name" style="color:${clr}">
+            ${getUserBadgeHtml(m.sender)}
+            ${getUserNameHtml(m.sender, displayName)}
+          </span>
+          <span class="mrow-time">${m.time || ft()}</span>
+        </div>
+        <div class="mrow-text" style="color:${isMe ? clr : tclr}">${fmsg(m.message)}</div>
+      </div>
     </div>
-    <div class="mrow-text" style="color:${isMe ? clr : tclr}">${fmsg(m.message)}</div>
   `;
   
   if (!isMe) {
@@ -1284,6 +1423,67 @@ socket.on('user_unblocked_private', ({ targetUsername }) => {
 });
 
 /* ===================================================
+   ROYAL FANFARE EFFECT FUNCTIONS
+=================================================== */
+function playRoyalFanfare() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [
+      { f: 261.63, d: 0.15 }, // C4
+      { f: 329.63, d: 0.15 }, // E4
+      { f: 392.00, d: 0.15 }, // G4
+      { f: 523.25, d: 0.3 },  // C5
+      { f: 392.00, d: 0.15 }, // G4
+      { f: 523.25, d: 0.6 }   // C5
+    ];
+    let time = audioCtx.currentTime;
+    notes.forEach(n => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(n.f, time);
+      gain.gain.setValueAtTime(0, time);
+      gain.gain.linearRampToValueAtTime(0.15, time + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + n.d);
+      osc.start(time);
+      osc.stop(time + n.d);
+      time += n.d - 0.03;
+    });
+  } catch (e) {
+    console.error('Audio context error:', e);
+  }
+}
+
+function triggerRoyalEntry(user) {
+  playRoyalFanfare();
+  
+  const banner = document.createElement('div');
+  banner.className = 'royal-banner';
+  banner.innerHTML = `
+    <div class="royal-title">👑 وصول ملكي للغرفة 👑</div>
+    <div class="royal-name">
+      <span>✨</span>
+      <span>${esc(user)}</span>
+      <span>✨</span>
+    </div>
+  `;
+  document.body.appendChild(banner);
+  
+  setTimeout(() => {
+    banner.classList.add('show');
+  }, 50);
+  
+  setTimeout(() => {
+    banner.classList.remove('show');
+    setTimeout(() => {
+      banner.remove();
+    }, 500);
+  }, 4000);
+}
+
+/* ===================================================
    USERS PANEL
 =================================================== */
 let chatUsers=[];
@@ -1323,11 +1523,18 @@ function renderUsers(users){
     const isKh = isKhalid(u.username);
     const row=document.createElement('div');
     row.className='user-row'+(isSpeaking?' speaking':'');
+
+    const avatarUrl = u.avatar || '';
+    const avatarStyle = avatarUrl 
+      ? `background-image: url('${avatarUrl}'); background-size: cover; background-position: center; border: 1px solid rgba(0,0,0,0.1);`
+      : `background:${clr}`;
+    const avatarContent = avatarUrl ? '' : u.username[0];
+
     row.innerHTML=`
-      <div class="ua" style="background:${clr}">${u.username[0]}</div>
+      <div class="ua" style="${avatarStyle}">${avatarContent}</div>
       <span class="un" style="color:${clr}">
-        ${isKh ? '<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">' : ''}
-        ${esc(u.username)}${isMe?' (أنت)':''}
+        ${getUserBadgeHtml(u.username)}
+        ${getUserNameHtml(u.username, u.username + (isMe?' (أنت)':''))}
       </span>
       <span class="ui" style="font-size:13px; font-weight:bold; color:#e09610">${icon}</span>
     `;
@@ -1365,15 +1572,29 @@ function addMsg(d){
   const row=document.createElement('div');
   row.className='mrow';
   const isKh = isKhalid(d.username);
+
+  // Find sender avatar
+  const onlineUser = chatUsers.find(x => x.username === d.username);
+  const avatarUrl = d.avatar || (onlineUser ? onlineUser.avatar : '');
+  const avatarStyle = avatarUrl 
+    ? `background-image: url('${avatarUrl}'); background-size: cover; background-position: center;`
+    : `background:${clr}`;
+  const avatarContent = avatarUrl ? '' : d.username[0];
+
   row.innerHTML=`
-    <div class="mrow-hdr">
-      <span class="mrow-name" style="color:${clr}">
-        ${isKh ? '<img src="/images/vip_badge.png" class="vip-badge" alt="VIP">' : ''}
-        ${esc(d.username)}
-      </span>
-      <span class="mrow-time">${d.time||ft()}</span>
+    <div style="display: flex; gap: 10px; align-items: flex-start; direction: rtl;">
+      <div class="ua" style="${avatarStyle}; width: 34px; height: 34px; border-radius: 50%; font-size: 14px; font-weight: 800; color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.2); flex-shrink: 0;">${avatarContent}</div>
+      <div style="flex: 1; min-width: 0; text-align: right;">
+        <div class="mrow-hdr">
+          <span class="mrow-name" style="color:${clr}">
+            ${getUserBadgeHtml(d.username)}
+            ${getUserNameHtml(d.username)}
+          </span>
+          <span class="mrow-time">${d.time||ft()}</span>
+        </div>
+        <div class="mrow-text" style="color:${isMe?clr:tclr}">${fmsg(d.message)}</div>
+      </div>
     </div>
-    <div class="mrow-text" style="color:${isMe?clr:tclr}">${fmsg(d.message)}</div>
   `;
   if(!isMe){
     row.addEventListener('contextmenu',e=>showCtx(e,d.username));

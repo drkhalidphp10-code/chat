@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#1e1e24"/>
+  <circle cx="50" cy="50" r="44" fill="none" stroke="#00e5ff" stroke-width="3" style="filter: drop-shadow(0px 0px 4px #00e5ff);"/>
+  <!-- User Silhouette -->
+  <path d="M50 22 C 38 22, 36 34, 36 40 C 36 48, 42 52, 50 52 C 58 52, 64 48, 64 40 C 64 34, 62 22, 50 22 Z" fill="#00e5ff" style="filter: drop-shadow(0px 0px 3px #00e5ff);"/>
+  <path d="M22 80 C 22 66, 32 60, 50 60 C 68 60, 78 66, 78 80 Z" fill="#00e5ff" style="filter: drop-shadow(0px 0px 3px #00e5ff);"/>
+</svg>

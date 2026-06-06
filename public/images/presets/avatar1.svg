@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#4a90e2"/>
+  <circle cx="50" cy="50" r="38" fill="#ffffff"/>
+  <!-- Hair -->
+  <path d="M25 45 C 25 25, 75 25, 75 45 C 75 35, 25 35, 25 45 Z" fill="#2c3e50"/>
+  <path d="M30 40 C 35 20, 65 20, 70 40" fill="#2c3e50"/>
+  <!-- Face -->
+  <circle cx="50" cy="52" r="22" fill="#fddcb9"/>
+  <!-- Hair details -->
+  <path d="M28 45 C 32 32, 68 32, 72 45" fill="none" stroke="#2c3e50" stroke-width="4"/>
+  <path d="M28 45 C 28 50, 32 50, 32 45" fill="#fddcb9"/>
+  <path d="M72 45 C 72 50, 68 50, 68 45" fill="#fddcb9"/>
+  <!-- Glasses -->
+  <rect x="34" y="47" width="12" height="8" rx="2" fill="none" stroke="#2c3e50" stroke-width="2.5"/>
+  <rect x="54" y="47" width="12" height="8" rx="2" fill="none" stroke="#2c3e50" stroke-width="2.5"/>
+  <line x1="46" y1="51" x2="54" y2="51" stroke="#2c3e50" stroke-width="2.5"/>
+  <!-- Eyes -->
+  <circle cx="40" cy="51" r="2" fill="#2c3e50"/>
+  <circle cx="60" cy="51" r="2" fill="#2c3e50"/>
+  <!-- Smile -->
+  <path d="M44 60 Q 50 65, 56 60" fill="none" stroke="#2c3e50" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Shirt -->
+  <path d="M32 72 C 32 72, 35 88, 50 88 C 65 88, 68 72, 68 72 Z" fill="#e74c3c"/>
+  <path d="M44 72 L 50 78 L 56 72" fill="#fddcb9"/>
+</svg>

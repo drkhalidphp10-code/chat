@@ -625,6 +625,35 @@ app.post('/api/verify-admin', async (req, res) => {
   return res.json({ success: true });
 });
 
+// Upload avatar endpoint
+app.post('/api/upload-avatar', (req, res) => {
+  const { image } = req.body;
+  if (!image) {
+    return res.status(400).json({ success: false, error: 'No image data provided' });
+  }
+
+  try {
+    const fs = require('fs');
+    const avatarsDir = path.join(__dirname, 'public', 'images', 'avatars');
+    if (!fs.existsSync(avatarsDir)) {
+      fs.mkdirSync(avatarsDir, { recursive: true });
+    }
+
+    // Remove the data URI scheme header if present
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    const filename = `avatar_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
+    const filepath = path.join(avatarsDir, filename);
+
+    fs.writeFileSync(filepath, buffer);
+    res.json({ success: true, url: `/images/avatars/${filename}` });
+  } catch (err) {
+    console.error('Error saving avatar:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Serve pages
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
@@ -655,7 +684,7 @@ io.on('connection', (socket) => {
   // -----------------------------------------------
   // JOIN ROOM
   // -----------------------------------------------
-  socket.on('join_room', async ({ username, room, color, password }) => {
+  socket.on('join_room', async ({ username, room, color, password, avatar }) => {
     if (!username || !room) return;
 
     const cleanUser = username.trim().substring(0, 30);
@@ -731,7 +760,7 @@ io.on('connection', (socket) => {
     // Join new room
     socket.join(cleanRoom);
     
-    const userData = { username: cleanUser, room: cleanRoom, color: userColor, id: socket.id, ip: clientIp };
+    const userData = { username: cleanUser, room: cleanRoom, color: userColor, id: socket.id, ip: clientIp, avatar: avatar || '' };
     onlineUsers.set(socket.id, userData);
 
     if (!roomUsers.has(cleanRoom)) roomUsers.set(cleanRoom, new Set());
@@ -739,6 +768,9 @@ io.on('connection', (socket) => {
 
     // Get users in room
     const usersInRoom = getRoomUsers(cleanRoom);
+    const isAdmin = await checkIsAdmin(cleanUser, cleanRoom);
+    const isKh = (cleanUser.replace(/^\[(عضو|مسجل)\]\s*/, '') === 'خالد');
+    const isVipUser = isKh || isAdmin;
 
     // Notify user joined
     socket.to(cleanRoom).emit('user_joined', {
@@ -746,12 +778,12 @@ io.on('connection', (socket) => {
       color: userColor,
       time: formatTime(),
       usersCount: usersInRoom.length,
-      users: usersInRoom
+      users: usersInRoom,
+      isVip: isVipUser
     });
 
     const activeSpk = activeSpeakers.get(cleanRoom);
     const qList = micQueues.get(cleanRoom) || [];
-    const isAdmin = await checkIsAdmin(cleanUser, cleanRoom);
 
     socket.emit('joined_room', {
       room: cleanRoom,
@@ -820,6 +852,7 @@ io.on('connection', (socket) => {
       id: uuidv4(),
       username: user.username,
       color: user.color,
+      avatar: user.avatar || '',
       message: cleanMsg,
       time: formatTime(),
       type: 'text'
@@ -1321,7 +1354,8 @@ io.on('connection', (socket) => {
       receiver: to,
       message: cleanMsg,
       time: formatTime(),
-      color: user.color
+      color: user.color,
+      avatar: user.avatar || ''
     };
 
     // Emit to receiver if online
@@ -1425,7 +1459,7 @@ function getRoomUsers(roomName) {
   if (roomUsers.has(roomName)) {
     for (const sid of roomUsers.get(roomName)) {
       const u = onlineUsers.get(sid);
-      if (u) users.push({ username: u.username, color: u.color, id: sid });
+      if (u) users.push({ username: u.username, color: u.color, id: sid, avatar: u.avatar || '' });
     }
   }
   return users;
