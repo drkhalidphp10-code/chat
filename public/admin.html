@@ -242,6 +242,9 @@
     <div class="nav-item" onclick="showPage('stats', this)">
       <span class="nav-icon">📈</span> الإحصائيات
     </div>
+    <div class="nav-item" onclick="showPage('directory', this)">
+      <span class="nav-icon">🗂️</span> دليل المواقع
+    </div>
     <div style="margin-top:auto;">
       <a href="/" class="nav-item" style="color:var(--danger);text-decoration:none;">
         <span class="nav-icon">🚪</span> العودة للدردشة
@@ -368,6 +371,135 @@
 
       <div class="section-title">📊 توزيع المستخدمين</div>
       <div id="statsRoomDetails"></div>
+    </div>
+
+    <!-- Directory Page -->
+    <div class="page-section" id="page-directory">
+
+      <!-- Top action bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div class="section-title" style="margin:0">🗂️ دليل المواقع</div>
+        <div style="display:flex;gap:10px;">
+          <a href="/directory" target="_blank" class="btn btn-ghost btn-sm">🔗 عرض الدليل</a>
+          <button class="btn btn-primary btn-sm" onclick="openAddSiteModal()">➕ إضافة موقع</button>
+        </div>
+      </div>
+
+      <!-- Directory stats -->
+      <div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card">
+          <div class="stat-icon">🌐</div>
+          <div class="stat-value" id="dirStatTotal">-</div>
+          <div class="stat-label">إجمالي المواقع</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⭐</div>
+          <div class="stat-value" id="dirStatFeatured">-</div>
+          <div class="stat-label">مواقع مميزة</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">👁️</div>
+          <div class="stat-value" id="dirStatVisits">-</div>
+          <div class="stat-label">إجمالي الزيارات</div>
+        </div>
+      </div>
+
+      <!-- Sites Table -->
+      <div class="table-wrapper" style="margin-bottom:32px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>الموقع</th>
+              <th>الفئة</th>
+              <th>الوصف القصير</th>
+              <th>الزيارات</th>
+              <th>مميز</th>
+              <th>العمليات</th>
+            </tr>
+          </thead>
+          <tbody id="directoryTableBody">
+            <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted)">جاري التحميل...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- SQL Console Section -->
+      <div class="section-title">🖥️ وحدة SQL المباشرة</div>
+      <div class="glass-card" style="padding:24px;border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:32px;">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">✅ مسموح: SELECT / SHOW / DESCRIBE / INSERT INTO directory_sites / UPDATE directory_sites / DELETE FROM directory_sites</p>
+        <textarea id="sqlInput" class="form-input" rows="4" placeholder="مثال: SELECT * FROM directory_sites WHERE is_featured = 1;" style="font-family:monospace;font-size:13px;resize:vertical;margin-bottom:12px;"></textarea>
+        <button class="btn btn-primary" onclick="executeSql()">▶️ تشغيل الاستعلام</button>
+        <div id="sqlResult" style="margin-top:16px;"></div>
+      </div>
+
+    </div>
+
+    <!-- Add/Edit Site Modal -->
+    <div class="modal-overlay" id="siteModal">
+      <div class="modal" style="max-width:680px;width:100%;padding:0;overflow:hidden;border-radius:var(--radius-lg);">
+        <div style="background:linear-gradient(135deg,var(--primary),var(--accent));padding:20px 24px;display:flex;align-items:center;justify-content:space-between;">
+          <h3 style="font-size:18px;font-weight:800;color:#fff;" id="modalTitle">➕ إضافة موقع جديد</h3>
+          <button onclick="closeSiteModal()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        </div>
+        <div style="padding:24px;overflow-y:auto;max-height:75vh;">
+          <input type="hidden" id="editSiteId" value="">
+
+          <!-- AI Generator -->
+          <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:var(--radius-lg);padding:16px;margin-bottom:20px;">
+            <div style="font-size:14px;font-weight:800;color:var(--primary-light);margin-bottom:10px;">🤖 مولّد الوصف بالذكاء الاصطناعي</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">أدخل اسم الموقع والفئة والكلمات المفتاحية أدناه، ثم اضغط الزر لتوليد وصف احترافي تلقائياً</p>
+            <button class="btn btn-primary w-full" onclick="generateAiDescription()" id="aiGenBtn">✨ توليد الوصف بالذكاء الاصطناعي</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">🏷️ اسم الموقع *</label>
+              <input type="text" id="siteName" class="form-input" placeholder="مثال: دردشة عراقية لقانا" required>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">🔗 رابط الموقع *</label>
+              <input type="url" id="siteUrl" class="form-input" placeholder="https://example.com" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">📁 الفئة</label>
+              <select id="siteCategory" class="form-input">
+                <option value="دردشة">💬 دردشة</option>
+                <option value="دردشة عراقية">🇮🇶 دردشة عراقية</option>
+                <option value="شات">🗨️ شات</option>
+                <option value="ترفيه">🎬 ترفيه</option>
+                <option value="تقنية">💻 تقنية</option>
+                <option value="اجتماعي">👥 اجتماعي</option>
+                <option value="عام" selected>🌐 عام</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">😀 الأيقونة (إيموجي)</label>
+              <input type="text" id="siteIcon" class="form-input" placeholder="🌐" maxlength="4" value="🌐">
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">📝 الوصف القصير (SEO Meta)</label>
+              <input type="text" id="siteShortDesc" class="form-input" placeholder="وصف قصير لا يزيد عن 160 حرف..." maxlength="300">
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">📖 الوصف الكامل</label>
+              <textarea id="siteDescription" class="form-input" rows="4" placeholder="وصف مفصل عن الموقع..."></textarea>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">🏷️ الكلمات المفتاحية (مفصولة بفاصلة)</label>
+              <input type="text" id="siteKeywords" class="form-input" placeholder="دردشة عراقية, شات, تواصل, مجاني">
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+              <input type="checkbox" id="siteFeatured" style="width:18px;height:18px;cursor:pointer;">
+              <label for="siteFeatured" class="form-label" style="margin:0;cursor:pointer;">⭐ موقع مميز (يظهر أولاً)</label>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:20px;">
+            <button class="btn btn-primary w-full" onclick="saveSite()" id="saveSiteBtn">💾 حفظ الموقع</button>
+            <button class="btn btn-ghost" onclick="closeSiteModal()" style="min-width:100px;">إلغاء</button>
+          </div>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -701,12 +833,255 @@ function showPage(page, el) {
     dashboard: '📊 لوحة التحكم',
     rooms: '🏠 إدارة الغرف',
     admins: '🔑 إدارة المشرفين',
-    stats: '📈 الإحصائيات'
+    stats: '📈 الإحصائيات',
+    directory: '🗂️ دليل المواقع'
   };
   document.getElementById('pageTitle').textContent = titles[page] || '';
 
   if (page === 'rooms') loadRoomsTable();
   if (page === 'admins') loadAdminsTable();
+  if (page === 'directory') loadDirectoryTable();
+}
+
+// ────────────────────────────────────────────
+// DIRECTORY MANAGEMENT
+// ────────────────────────────────────────────
+
+async function loadDirectoryTable() {
+  try {
+    const res = await fetch('/api/directory');
+    const data = await res.json();
+    const sites = data.sites || [];
+
+    // Update stats
+    document.getElementById('dirStatTotal').textContent = sites.length;
+    document.getElementById('dirStatFeatured').textContent = sites.filter(s => s.is_featured).length;
+    const totalVisits = sites.reduce((sum, s) => sum + (parseInt(s.visit_count) || 0), 0);
+    document.getElementById('dirStatVisits').textContent = totalVisits.toLocaleString('ar');
+
+    // Render table
+    const tbody = document.getElementById('directoryTableBody');
+    tbody.innerHTML = '';
+    if (sites.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">لا توجد مواقع مدرجة بعد. ابدأ بإضافة أول موقع!</td></tr>';
+      return;
+    }
+    sites.forEach(site => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:24px;">${site.icon_emoji || '🌐'}</span>
+            <div>
+              <div style="font-weight:800;">${escapeHtml(site.name)}</div>
+              <a href="${escapeHtml(site.url)}" target="_blank" style="font-size:11px;color:var(--primary-light);text-decoration:none;" rel="noopener">${escapeHtml(site.url).substring(0,40)}...</a>
+            </div>
+          </div>
+        </td>
+        <td><span class="badge badge-primary">${escapeHtml(site.category)}</span></td>
+        <td style="font-size:12px;color:var(--text-muted);max-width:200px;">${escapeHtml((site.short_desc || '').substring(0,80))}${site.short_desc && site.short_desc.length > 80 ? '...' : ''}</td>
+        <td><span class="badge badge-success">👁️ ${site.visit_count || 0}</span></td>
+        <td>${site.is_featured ? '<span class="badge" style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;">⭐ مميز</span>' : '-'}</td>
+        <td style="white-space:nowrap;">
+          <div style="display:flex;gap:6px;">
+            <a href="/directory/${encodeURIComponent(site.slug)}" target="_blank" class="btn btn-ghost btn-sm" title="عرض الصفحة">👁️</a>
+            <button class="btn btn-ghost btn-sm" onclick="editSite(${site.id})" title="تعديل">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDeleteSite(${site.id}, '${escapeHtml(site.name)}')">🗑️</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    showToast('خطأ في جلب قائمة الدليل', 'error');
+  }
+}
+
+function openAddSiteModal() {
+  document.getElementById('modalTitle').textContent = '➕ إضافة موقع جديد';
+  document.getElementById('editSiteId').value = '';
+  document.getElementById('siteName').value = '';
+  document.getElementById('siteUrl').value = '';
+  document.getElementById('siteShortDesc').value = '';
+  document.getElementById('siteDescription').value = '';
+  document.getElementById('siteKeywords').value = '';
+  document.getElementById('siteIcon').value = '🌐';
+  document.getElementById('siteFeatured').checked = false;
+  document.getElementById('siteCategory').value = 'عام';
+  document.getElementById('siteModal').classList.add('active');
+}
+
+function closeSiteModal() {
+  document.getElementById('siteModal').classList.remove('active');
+}
+
+let allDirSites = [];
+async function editSite(id) {
+  if (allDirSites.length === 0) {
+    const res = await fetch('/api/directory');
+    const data = await res.json();
+    allDirSites = data.sites || [];
+  }
+  const site = allDirSites.find(s => s.id === id);
+  if (!site) { showToast('لم يتم العثور على الموقع', 'error'); return; }
+
+  document.getElementById('modalTitle').textContent = '✏️ تعديل الموقع';
+  document.getElementById('editSiteId').value = site.id;
+  document.getElementById('siteName').value = site.name;
+  document.getElementById('siteUrl').value = site.url;
+  document.getElementById('siteShortDesc').value = site.short_desc || '';
+  document.getElementById('siteDescription').value = site.description || '';
+  document.getElementById('siteKeywords').value = site.keywords || '';
+  document.getElementById('siteIcon').value = site.icon_emoji || '🌐';
+  document.getElementById('siteFeatured').checked = !!site.is_featured;
+  document.getElementById('siteCategory').value = site.category || 'عام';
+  document.getElementById('siteModal').classList.add('active');
+}
+
+async function saveSite() {
+  const editId = document.getElementById('editSiteId').value;
+  const name = document.getElementById('siteName').value.trim();
+  const url = document.getElementById('siteUrl').value.trim();
+  if (!name || !url) { showToast('الاسم والرابط مطلوبان', 'error'); return; }
+
+  const payload = {
+    adminUsername: adminUser,
+    adminPassword: adminPass,
+    name,
+    url,
+    short_desc: document.getElementById('siteShortDesc').value.trim(),
+    description: document.getElementById('siteDescription').value.trim(),
+    keywords: document.getElementById('siteKeywords').value.trim(),
+    icon_emoji: document.getElementById('siteIcon').value.trim() || '🌐',
+    category: document.getElementById('siteCategory').value,
+    is_featured: document.getElementById('siteFeatured').checked,
+    is_active: true
+  };
+
+  const btn = document.getElementById('saveSiteBtn');
+  btn.textContent = '⏳ جاري الحفظ...';
+  btn.disabled = true;
+
+  try {
+    let res;
+    if (editId) {
+      res = await fetch(`/api/directory/${editId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    } else {
+      res = await fetch('/api/directory/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    }
+    const data = await res.json();
+    if (data.success) {
+      showToast(editId ? 'تم تحديث الموقع بنجاح ✅' : 'تم إضافة الموقع بنجاح ✅', 'success');
+      closeSiteModal();
+      allDirSites = [];
+      loadDirectoryTable();
+    } else {
+      showToast(data.error || 'فشل الحفظ', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  } finally {
+    btn.textContent = '💾 حفظ الموقع';
+    btn.disabled = false;
+  }
+}
+
+function confirmDeleteSite(id, name) {
+  showConfirmModal('حذف موقع 🗑️', `هل أنت متأكد من حذف موقع "${name}"؟`, () => deleteSite(id));
+}
+
+async function deleteSite(id) {
+  try {
+    const res = await fetch(`/api/directory/${id}`, {
+      method: 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminUsername: adminUser, adminPassword: adminPass })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('تم حذف الموقع بنجاح', 'success');
+      allDirSites = [];
+      loadDirectoryTable();
+    } else {
+      showToast(data.error || 'فشل الحذف', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
+}
+
+async function generateAiDescription() {
+  const name = document.getElementById('siteName').value.trim();
+  const category = document.getElementById('siteCategory').value;
+  const keywords = document.getElementById('siteKeywords').value.trim();
+  const url = document.getElementById('siteUrl').value.trim();
+
+  if (!name) { showToast('أدخل اسم الموقع أولاً لتوليد الوصف', 'error'); return; }
+
+  const btn = document.getElementById('aiGenBtn');
+  btn.textContent = '⏳ جاري التوليد...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/directory/generate-description', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminUsername: adminUser, adminPassword: adminPass, siteName: name, siteUrl: url, category, keywords })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('siteDescription').value = data.description;
+      document.getElementById('siteShortDesc').value = data.short_desc;
+      if (!keywords && data.keywords) document.getElementById('siteKeywords').value = data.keywords;
+      showToast('✨ تم توليد الوصف بنجاح!', 'success');
+    } else {
+      showToast(data.error || 'فشل التوليد', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  } finally {
+    btn.textContent = '✨ توليد الوصف بالذكاء الاصطناعي';
+    btn.disabled = false;
+  }
+}
+
+async function executeSql() {
+  const query = document.getElementById('sqlInput').value.trim();
+  if (!query) { showToast('أدخل استعلام SQL أولاً', 'error'); return; }
+
+  const resultDiv = document.getElementById('sqlResult');
+  resultDiv.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">⏳ جاري التنفيذ...</div>';
+
+  try {
+    const res = await fetch('/api/directory/sql', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminUsername: adminUser, adminPassword: adminPass, query })
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      resultDiv.innerHTML = `<div style="color:var(--danger);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;font-size:13px;font-family:monospace;">❌ ${escapeHtml(data.error)}</div>`;
+      return;
+    }
+
+    const rows = data.rows || [];
+    if (rows.length === 0) {
+      resultDiv.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px;background:var(--bg-card);border-radius:8px;">✅ تم التنفيذ. لا توجد صفوف للعرض.</div>';
+      return;
+    }
+
+    const cols = data.columns && data.columns.length > 0 ? data.columns : Object.keys(rows[0]);
+    let html = `<div style="overflow-x:auto;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">✅ ${rows.length} صف</div><table class="data-table" style="font-size:12px;"><thead><tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>`;
+    rows.slice(0, 100).forEach(row => {
+      html += '<tr>' + cols.map(c => `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(String(row[c] ?? ''))}"> ${escapeHtml(String(row[c] ?? ''))}</td>`).join('') + '</tr>';
+    });
+    html += '</tbody></table></div>';
+    if (rows.length > 100) html += `<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">عرض أول 100 صف من ${rows.length}</div>`;
+    resultDiv.innerHTML = html;
+  } catch (e) {
+    resultDiv.innerHTML = `<div style="color:var(--danger);font-size:13px;">❌ خطأ في الاتصال: ${escapeHtml(e.message)}</div>`;
+  }
 }
 
 function showToast(msg, type = 'info') {
@@ -742,6 +1117,11 @@ window.addEventListener('DOMContentLoaded', () => {
     loadStats();
     loadRoomsTable();
   }
+
+  // Close site modal on overlay click
+  document.getElementById('siteModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSiteModal();
+  });
 });
 </script>
 </body>

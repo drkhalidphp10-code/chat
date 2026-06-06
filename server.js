@@ -135,6 +135,27 @@ async function createTables() {
       UNIQUE KEY unique_block (blocker, blocked),
       INDEX idx_blocker (blocker)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    `CREATE TABLE IF NOT EXISTS directory_sites (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      url VARCHAR(500) NOT NULL,
+      description TEXT,
+      short_desc VARCHAR(400),
+      category VARCHAR(100) DEFAULT 'عام',
+      keywords TEXT,
+      icon_emoji VARCHAR(20) DEFAULT '🌐',
+      is_featured BOOLEAN DEFAULT FALSE,
+      is_active BOOLEAN DEFAULT TRUE,
+      visit_count INT DEFAULT 0,
+      slug VARCHAR(200) UNIQUE,
+      og_image VARCHAR(500),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_slug (slug),
+      INDEX idx_category (category),
+      INDEX idx_active (is_active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   ];
 
   for (const query of queries) {
@@ -654,10 +675,457 @@ app.post('/api/upload-avatar', (req, res) => {
   }
 });
 
+// ============================================
+// Directory API Routes
+// ============================================
+
+// In-memory fallback for directory
+const inMemoryDirectory = [];
+
+// Helper: create URL-friendly slug
+function createSlug(text) {
+  return text
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\u0600-\u06FFa-zA-Z0-9-]/g, '')
+    .substring(0, 100)
+    .replace(/-+$/, '') || 'site-' + Date.now();
+}
+
+// GET /api/directory - get all active sites
+app.get('/api/directory', async (req, res) => {
+  const { category, search, featured } = req.query;
+  try {
+    if (db) {
+      let query = 'SELECT * FROM directory_sites WHERE is_active = 1';
+      const params = [];
+      if (category && category !== 'all') { query += ' AND category = ?'; params.push(category); }
+      if (featured === '1') { query += ' AND is_featured = 1'; }
+      if (search) { query += ' AND (name LIKE ? OR short_desc LIKE ? OR keywords LIKE ?)'; const s = `%${search}%`; params.push(s, s, s); }
+      query += ' ORDER BY is_featured DESC, visit_count DESC, created_at DESC';
+      const [rows] = await db.query(query, params);
+      res.json({ success: true, sites: rows });
+    } else {
+      let sites = inMemoryDirectory.filter(s => s.is_active);
+      if (category && category !== 'all') sites = sites.filter(s => s.category === category);
+      if (search) { const s = search.toLowerCase(); sites = sites.filter(s2 => s2.name.toLowerCase().includes(s) || (s2.short_desc || '').toLowerCase().includes(s)); }
+      res.json({ success: true, sites });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/directory/categories - list unique categories
+app.get('/api/directory/categories', async (req, res) => {
+  try {
+    if (db) {
+      const [rows] = await db.query('SELECT DISTINCT category, COUNT(*) as count FROM directory_sites WHERE is_active=1 GROUP BY category ORDER BY count DESC');
+      res.json({ success: true, categories: rows });
+    } else {
+      const cats = {};
+      inMemoryDirectory.forEach(s => { if (s.is_active) cats[s.category] = (cats[s.category] || 0) + 1; });
+      res.json({ success: true, categories: Object.entries(cats).map(([category, count]) => ({ category, count })) });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/directory/add - add new site (admin only)
+app.post('/api/directory/add', async (req, res) => {
+  const { adminUsername, adminPassword, name, url, description, short_desc, category, keywords, icon_emoji, is_featured, og_image } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) return res.status(403).json({ success: false, error: 'غير مصرح' });
+  if (!name || !url) return res.status(400).json({ success: false, error: 'الاسم والرابط مطلوبان' });
+
+  const slug = createSlug(name);
+  const siteData = {
+    name: name.trim(),
+    url: url.trim(),
+    description: description || '',
+    short_desc: short_desc || '',
+    category: category || 'عام',
+    keywords: keywords || '',
+    icon_emoji: icon_emoji || '🌐',
+    is_featured: is_featured ? 1 : 0,
+    slug,
+    og_image: og_image || ''
+  };
+
+  try {
+    if (db) {
+      const [existing] = await db.query('SELECT id FROM directory_sites WHERE slug = ?', [slug]);
+      const finalSlug = existing.length > 0 ? slug + '-' + Date.now() : slug;
+      siteData.slug = finalSlug;
+      const [result] = await db.query(
+        'INSERT INTO directory_sites (name, url, description, short_desc, category, keywords, icon_emoji, is_featured, slug, og_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [siteData.name, siteData.url, siteData.description, siteData.short_desc, siteData.category, siteData.keywords, siteData.icon_emoji, siteData.is_featured, siteData.slug, siteData.og_image]
+      );
+      res.json({ success: true, site: { id: result.insertId, ...siteData } });
+    } else {
+      const id = inMemoryDirectory.length + 1;
+      const site = { id, ...siteData, is_active: true, visit_count: 0, created_at: new Date() };
+      inMemoryDirectory.push(site);
+      res.json({ success: true, site });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PUT /api/directory/:id - update site (admin only)
+app.put('/api/directory/:id', async (req, res) => {
+  const { adminUsername, adminPassword, name, url, description, short_desc, category, keywords, icon_emoji, is_featured, is_active, og_image } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) return res.status(403).json({ success: false, error: 'غير مصرح' });
+  const siteId = parseInt(req.params.id);
+  try {
+    if (db) {
+      await db.query(
+        'UPDATE directory_sites SET name=?, url=?, description=?, short_desc=?, category=?, keywords=?, icon_emoji=?, is_featured=?, is_active=?, og_image=?, updated_at=NOW() WHERE id=?',
+        [name, url, description, short_desc, category, keywords, icon_emoji, is_featured ? 1 : 0, is_active !== false ? 1 : 0, og_image || '', siteId]
+      );
+      res.json({ success: true, message: 'تم التحديث بنجاح' });
+    } else {
+      const site = inMemoryDirectory.find(s => s.id === siteId);
+      if (!site) return res.status(404).json({ success: false, error: 'الموقع غير موجود' });
+      Object.assign(site, { name, url, description, short_desc, category, keywords, icon_emoji, is_featured, is_active });
+      res.json({ success: true, message: 'تم التحديث بنجاح' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/directory/:id - delete site (admin only)
+app.delete('/api/directory/:id', async (req, res) => {
+  const { adminUsername, adminPassword } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) return res.status(403).json({ success: false, error: 'غير مصرح' });
+  const siteId = parseInt(req.params.id);
+  try {
+    if (db) {
+      await db.query('UPDATE directory_sites SET is_active = 0 WHERE id = ?', [siteId]);
+      res.json({ success: true, message: 'تم الحذف بنجاح' });
+    } else {
+      const idx = inMemoryDirectory.findIndex(s => s.id === siteId);
+      if (idx === -1) return res.status(404).json({ success: false, error: 'الموقع غير موجود' });
+      inMemoryDirectory[idx].is_active = false;
+      res.json({ success: true, message: 'تم الحذف بنجاح' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/directory/visit/:id - increment visit count
+app.post('/api/directory/visit/:id', async (req, res) => {
+  const siteId = parseInt(req.params.id);
+  try {
+    if (db) {
+      await db.query('UPDATE directory_sites SET visit_count = visit_count + 1 WHERE id = ?', [siteId]);
+    } else {
+      const site = inMemoryDirectory.find(s => s.id === siteId);
+      if (site) site.visit_count = (site.visit_count || 0) + 1;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false });
+  }
+});
+
+// POST /api/directory/generate-description - AI description writer
+app.post('/api/directory/generate-description', async (req, res) => {
+  const { adminUsername, adminPassword, siteName, siteUrl, category, keywords } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) return res.status(403).json({ success: false, error: 'غير مصرح' });
+
+  // Smart template-based AI description (no external API needed - always works)
+  const categoryDescriptions = {
+    'دردشة': { adj: 'رائدة', features: 'تواصل فوري وآمن مع مستخدمين من جميع أنحاء العالم العربي', type: 'منصة دردشة' },
+    'دردشة عراقية': { adj: 'العراقية الأولى', features: 'غرف دردشة صوتية وكتابية تجمع العراقيين من بغداد وسائر المحافظات', type: 'دردشة عراقية' },
+    'شات': { adj: 'متميزة', features: 'محادثات حية وغرف متعددة وتواصل بلا حدود', type: 'شات عربي' },
+    'ترفيه': { adj: 'المميزة', features: 'محتوى ترفيهي متجدد يومياً يشمل الفيديو والصوت والألعاب', type: 'منصة ترفيهية' },
+    'تقنية': { adj: 'التقنية الرائدة', features: 'أحدث الأخبار والمقالات والبرامج التقنية والتطبيقات', type: 'موقع تقني' },
+    'اجتماعي': { adj: 'الاجتماعية الأولى', features: 'تواصل اجتماعي حقيقي وبناء علاقات صادقة', type: 'شبكة اجتماعية' },
+    'عام': { adj: 'المتميز', features: 'خدمات متنوعة وشاملة تلبي احتياجات المستخدم العربي', type: 'موقع إلكتروني' }
+  };
+
+  const catKey = Object.keys(categoryDescriptions).find(k => (category || '').includes(k)) || 'عام';
+  const catData = categoryDescriptions[catKey];
+  const kw = keywords ? keywords.split(',').map(k => k.trim()).filter(Boolean) : [];
+  const kwStr = kw.length > 0 ? ` يتميز بـ ${kw.slice(0, 3).join(' و')}` : '';
+
+  const fullDesc = `${siteName} هو ${catData.type} ${catData.adj} يوفر ${catData.features}${kwStr}. يتميز ${siteName} بواجهة عربية سهلة الاستخدام وتجربة مستخدم استثنائية تجمع أفضل المميزات في منصة واحدة متكاملة. سواء كنت تبحث عن التواصل أو الترفيه أو المعلومات، فإن ${siteName} هو وجهتك الأولى والأمثل في عالم الإنترنت العربي.`;
+
+  const shortDesc = `${catData.type} ${catData.adj} - ${catData.features.substring(0, 80)}...`;
+
+  const suggestedKeywords = [
+    siteName,
+    category || 'عام',
+    ...kw.slice(0, 3),
+    'عربي', 'مجاني', 'للجوال'
+  ].filter(Boolean).join(', ');
+
+  res.json({
+    success: true,
+    description: fullDesc,
+    short_desc: shortDesc,
+    keywords: suggestedKeywords
+  });
+});
+
+// POST /api/directory/sql - execute custom SQL (admin only)
+app.post('/api/directory/sql', async (req, res) => {
+  const { adminUsername, adminPassword, query: sqlQuery } = req.body;
+  const isValid = await isValidSuperAdmin(adminUsername, adminPassword);
+  if (!isValid) return res.status(403).json({ success: false, error: 'غير مصرح' });
+  if (!sqlQuery || !sqlQuery.trim()) return res.status(400).json({ success: false, error: 'الاستعلام فارغ' });
+
+  // Safety: only allow SELECT, INSERT, UPDATE on directory_sites table + SHOW, DESCRIBE
+  const cleanQ = sqlQuery.trim().toUpperCase();
+  const allowed = cleanQ.startsWith('SELECT') || cleanQ.startsWith('SHOW') || cleanQ.startsWith('DESCRIBE') ||
+    (cleanQ.startsWith('INSERT') && cleanQ.includes('DIRECTORY_SITES')) ||
+    (cleanQ.startsWith('UPDATE') && cleanQ.includes('DIRECTORY_SITES')) ||
+    (cleanQ.startsWith('DELETE') && cleanQ.includes('DIRECTORY_SITES'));
+  if (!allowed) {
+    return res.status(403).json({ success: false, error: 'هذا الاستعلام غير مسموح به. يُسمح فقط بـ SELECT/SHOW/INSERT/UPDATE/DELETE على جدول directory_sites' });
+  }
+
+  try {
+    if (!db) return res.status(503).json({ success: false, error: 'قاعدة البيانات غير متصلة' });
+    const [rows, fields] = await db.query(sqlQuery);
+    const columns = fields ? fields.map(f => f.name) : [];
+    res.json({ success: true, rows: Array.isArray(rows) ? rows : [{ affected_rows: rows.affectedRows || 0 }], columns });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// GET /sitemap.xml - dynamic sitemap
+app.get('/sitemap.xml', async (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  let sites = [];
+  try {
+    if (db) {
+      const [rows] = await db.query('SELECT slug, updated_at FROM directory_sites WHERE is_active = 1');
+      sites = rows;
+    } else {
+      sites = inMemoryDirectory.filter(s => s.is_active);
+    }
+  } catch (e) {}
+
+  const siteUrls = sites.map(s => `
+  <url>
+    <loc>${baseUrl}/directory/${encodeURIComponent(s.slug)}</loc>
+    <lastmod>${s.updated_at ? new Date(s.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`).join('');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${baseUrl}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/directory</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>${siteUrls}
+</urlset>`;
+
+  res.set('Content-Type', 'application/xml');
+  res.send(xml);
+});
+
+// GET /directory/:slug - Server-Side Rendered page for each site
+app.get('/directory/:slug', async (req, res) => {
+  const slug = req.params.slug;
+  let site = null;
+  let relatedSites = [];
+
+  try {
+    if (db) {
+      const [rows] = await db.query('SELECT * FROM directory_sites WHERE slug = ? AND is_active = 1', [slug]);
+      if (rows.length > 0) {
+        site = rows[0];
+        const [related] = await db.query(
+          'SELECT id, name, short_desc, icon_emoji, slug, category FROM directory_sites WHERE category = ? AND slug != ? AND is_active = 1 LIMIT 4',
+          [site.category, slug]
+        );
+        relatedSites = related;
+      }
+    } else {
+      site = inMemoryDirectory.find(s => s.slug === slug && s.is_active);
+      if (site) relatedSites = inMemoryDirectory.filter(s => s.category === site.category && s.slug !== slug && s.is_active).slice(0, 4);
+    }
+  } catch (e) { console.error(e); }
+
+  if (!site) {
+    return res.status(404).send(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الصفحة غير موجودة</title></head><body style="text-align:center;padding:80px;font-family:sans-serif"><h1>404 - الصفحة غير موجودة</h1><a href="/directory">← العودة للدليل</a></body></html>`);
+  }
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const pageUrl = `${baseUrl}/directory/${slug}`;
+  const ogImage = site.og_image || `${baseUrl}/images/master_gold_shield.png`;
+  const kw = site.keywords || `${site.name}, ${site.category}, عربي`;
+
+  const relatedHTML = relatedSites.length > 0 ? `
+    <section class="related-section">
+      <h2 class="related-title">مواقع مشابهة في فئة "${site.category}"</h2>
+      <div class="related-grid">
+        ${relatedSites.map(r => `
+          <a href="/directory/${encodeURIComponent(r.slug)}" class="related-card">
+            <span class="related-icon">${r.icon_emoji || '🌐'}</span>
+            <div>
+              <div class="related-name">${r.name}</div>
+              <div class="related-desc">${r.short_desc || ''}</div>
+            </div>
+          </a>`).join('')}
+      </div>
+    </section>` : '';
+
+  const schemaOrg = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": site.name,
+    "description": site.short_desc || site.description,
+    "url": pageUrl,
+    "image": ogImage,
+    "breadcrumb": {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "الرئيسية", "item": baseUrl },
+        { "@type": "ListItem", "position": 2, "name": "دليل المواقع", "item": `${baseUrl}/directory` },
+        { "@type": "ListItem", "position": 3, "name": site.name, "item": pageUrl }
+      ]
+    }
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${site.name} | دليل المواقع العربية</title>
+  <meta name="description" content="${(site.short_desc || site.description || '').substring(0, 160)}">
+  <meta name="keywords" content="${kw}">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${site.name} | دليل المواقع العربية">
+  <meta property="og:description" content="${(site.short_desc || site.description || '').substring(0, 200)}">
+  <meta property="og:image" content="${ogImage}">
+  <meta property="og:url" content="${pageUrl}">
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:title" content="${site.name}">
+  <meta property="twitter:description" content="${(site.short_desc || '').substring(0, 160)}">
+  <meta property="twitter:image" content="${ogImage}">
+  <link rel="canonical" href="${pageUrl}">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <script type="application/ld+json">${schemaOrg}</script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
+    body{background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);min-height:100vh;color:#fff}
+    .hero{background:linear-gradient(135deg,rgba(124,58,237,0.3),rgba(236,72,153,0.2));padding:0;border-bottom:1px solid rgba(255,255,255,0.1)}
+    .nav-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:rgba(0,0,0,0.3)}
+    .nav-logo{font-size:20px;font-weight:900;color:#a78bfa;text-decoration:none}
+    .breadcrumb{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,0.6);padding:12px 24px}
+    .breadcrumb a{color:rgba(255,255,255,0.6);text-decoration:none}.breadcrumb a:hover{color:#a78bfa}
+    .breadcrumb span{color:rgba(255,255,255,0.3)}
+    .hero-content{display:flex;align-items:center;gap:24px;padding:48px 24px 40px;max-width:900px;margin:0 auto}
+    .hero-icon{width:88px;height:88px;border-radius:24px;background:linear-gradient(135deg,#7c3aed,#ec4899);display:flex;align-items:center;justify-content:center;font-size:44px;flex-shrink:0;box-shadow:0 8px 32px rgba(124,58,237,0.5)}
+    .hero-text h1{font-size:2rem;font-weight:900;margin-bottom:8px;line-height:1.2}
+    .hero-text .category-tag{display:inline-block;background:rgba(167,139,250,0.2);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;margin-bottom:12px}
+    .hero-text .short-desc{font-size:16px;color:rgba(255,255,255,0.75);line-height:1.6}
+    .visit-btn{display:inline-flex;align-items:center;gap:8px;margin-top:20px;padding:12px 28px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;text-decoration:none;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4)}
+    .visit-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,0.6)}
+    .stats-bar{display:flex;gap:24px;padding:16px 24px;background:rgba(0,0,0,0.2);border-top:1px solid rgba(255,255,255,0.05)}
+    .stat-item{display:flex;align-items:center;gap:6px;font-size:13px;color:rgba(255,255,255,0.5)}
+    .stat-item strong{color:rgba(255,255,255,0.9)}
+    .main-content{max-width:900px;margin:0 auto;padding:40px 24px}
+    .desc-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:32px;margin-bottom:32px;backdrop-filter:blur(10px)}
+    .desc-card h2{font-size:18px;font-weight:800;color:#a78bfa;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .desc-text{font-size:15px;line-height:2;color:rgba(255,255,255,0.8)}
+    .keywords-section{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px}
+    .kw-tag{background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.3);color:#c4b5fd;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600}
+    .related-section{margin-top:40px}
+    .related-title{font-size:18px;font-weight:800;color:#a78bfa;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+    .related-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+    .related-card{display:flex;align-items:center;gap:12px;padding:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:16px;text-decoration:none;color:#fff;transition:all 0.2s}
+    .related-card:hover{background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.4);transform:translateY(-2px)}
+    .related-icon{font-size:28px;flex-shrink:0}
+    .related-name{font-size:14px;font-weight:700;margin-bottom:3px}
+    .related-desc{font-size:11px;color:rgba(255,255,255,0.5)}
+    footer{text-align:center;padding:40px 24px;color:rgba(255,255,255,0.3);font-size:13px;border-top:1px solid rgba(255,255,255,0.05)}
+    footer a{color:#a78bfa;text-decoration:none}
+    @media(max-width:600px){.hero-content{flex-direction:column;text-align:center;padding:32px 16px}.hero-text h1{font-size:1.5rem}.stats-bar{flex-wrap:wrap;gap:12px}.related-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <nav class="nav-bar">
+      <a href="/directory" class="nav-logo">🗂️ دليل المواقع</a>
+      <a href="/" style="color:rgba(255,255,255,0.6);font-size:13px;text-decoration:none;">🏠 الرئيسية</a>
+    </nav>
+    <div class="breadcrumb">
+      <a href="/">الرئيسية</a>
+      <span>›</span>
+      <a href="/directory">دليل المواقع</a>
+      <span>›</span>
+      <span style="color:rgba(255,255,255,0.9)">${site.name}</span>
+    </div>
+    <div class="hero-content">
+      <div class="hero-icon">${site.icon_emoji || '🌐'}</div>
+      <div class="hero-text">
+        <span class="category-tag">${site.category}</span>
+        <h1>${site.name}</h1>
+        <p class="short-desc">${site.short_desc || ''}</p>
+        <a href="${site.url}" target="_blank" rel="noopener nofollow" class="visit-btn" onclick="incrementVisit(${site.id})">
+          🚀 زيارة الموقع
+        </a>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item">👁️ <strong>${site.visit_count || 0}</strong> زيارة</div>
+      <div class="stat-item">📁 <strong>${site.category}</strong></div>
+      <div class="stat-item">📅 <strong>${new Date(site.created_at).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}</strong></div>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <article class="desc-card">
+      <h2>📖 عن الموقع</h2>
+      <p class="desc-text">${site.description || site.short_desc || 'لا يوجد وصف متاح حالياً.'}</p>
+      ${site.keywords ? `<div class="keywords-section">${site.keywords.split(',').map(k => `<span class="kw-tag">${k.trim()}</span>`).join('')}</div>` : ''}
+    </article>
+
+    ${relatedHTML}
+  </main>
+
+  <footer>
+    <p>© 2025 دليل المواقع العربية | <a href="/directory">العودة للدليل</a> | <a href="/">الدردشة العراقية</a></p>
+  </footer>
+
+  <script>
+    function incrementVisit(id) {
+      fetch('/api/directory/visit/' + id, { method: 'POST' }).catch(() => {});
+    }
+  </script>
+</body>
+</html>`;
+
+  res.send(html);
+});
+
 // Serve pages
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/directory', (req, res) => res.sendFile(path.join(__dirname, 'public', 'directory.html')));
 
 // ============================================
 // Socket.io Events
@@ -1595,4 +2063,25 @@ server.listen(PORT, () => {
   
   // Initialize database in background so it doesn't block server startup
   initDB();
+
+  // Search Engine Auto-Ping for Sitemap indexing
+  setTimeout(pingSearchEngines, 15000); // Initial ping after 15s
+  setInterval(pingSearchEngines, 3 * 60 * 60 * 1000); // Repeating ping every 3 hours
 });
+
+const https = require('https');
+function pingSearchEngines() {
+  const sitemapUrl = 'https://mandubi.shop/sitemap.xml';
+  const targets = [
+    `https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`,
+    `https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`
+  ];
+
+  targets.forEach(url => {
+    https.get(url, (res) => {
+      console.log(`📡 [Sitemap Ping] Sent to search engine | Status: ${res.statusCode}`);
+    }).on('error', (e) => {
+      console.error(`❌ [Sitemap Ping] Failed | Error: ${e.message}`);
+    });
+  });
+}
