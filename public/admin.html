@@ -426,9 +426,38 @@
       <!-- SQL Console Section -->
       <div class="section-title">🖥️ وحدة SQL المباشرة</div>
       <div class="glass-card" style="padding:24px;border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:32px;">
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">✅ مسموح: SELECT / SHOW / DESCRIBE / INSERT INTO directory_sites / UPDATE directory_sites / DELETE FROM directory_sites</p>
+
+        <!-- Quick Query Buttons -->
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;font-weight:700;">⚡ استعلامات سريعة — اضغط لتشغيل مباشرة:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="quickQuery('SELECT id, name, url, category, visit_count FROM directory_sites WHERE category LIKE \'%دردشة%\' OR category LIKE \'%شات%\' ORDER BY visit_count DESC')">
+              💬 روابط الدردشة
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="quickQuery('SELECT id, name, url, category, visit_count FROM directory_sites WHERE is_active = 1 ORDER BY visit_count DESC')">
+              🌐 كل المواقع النشطة
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="quickQuery('SELECT id, name, url, category, visit_count FROM directory_sites WHERE is_featured = 1 ORDER BY visit_count DESC')">
+              ⭐ المواقع المميزة
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="quickQuery('SELECT id, name, url, category, visit_count FROM directory_sites ORDER BY visit_count DESC LIMIT 10')">
+              🔥 الأكثر زيارة
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="quickQuery('SELECT id, name, url, category, visit_count FROM directory_sites ORDER BY created_at DESC LIMIT 10')">
+              🆕 آخر المضافة
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="quickQuery('SELECT category, COUNT(*) as عدد_المواقع FROM directory_sites WHERE is_active=1 GROUP BY category ORDER BY عدد_المواقع DESC')">
+              📊 إحصاء حسب الفئة
+            </button>
+          </div>
+        </div>
+
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;border-top:1px solid var(--border);padding-top:14px;">✅ مسموح: SELECT / SHOW / INSERT INTO directory_sites / UPDATE directory_sites / DELETE FROM directory_sites</p>
         <textarea id="sqlInput" class="form-input" rows="4" placeholder="مثال: SELECT * FROM directory_sites WHERE is_featured = 1;" style="font-family:monospace;font-size:13px;resize:vertical;margin-bottom:12px;"></textarea>
-        <button class="btn btn-primary" onclick="executeSql()">▶️ تشغيل الاستعلام</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn btn-primary" onclick="executeSql()">▶️ تشغيل الاستعلام</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sqlInput').value='';document.getElementById('sqlResult').innerHTML=''">🗑️ مسح</button>
+        </div>
         <div id="sqlResult" style="margin-top:16px;"></div>
       </div>
 
@@ -1043,6 +1072,11 @@ async function generateAiDescription() {
     btn.textContent = '✨ توليد الوصف بالذكاء الاصطناعي';
     btn.disabled = false;
   }
+}
+
+function quickQuery(sql) {
+  document.getElementById('sqlInput').value = sql;
+  executeSql();
 }
 
 async function executeSql() {
