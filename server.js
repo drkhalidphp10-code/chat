@@ -966,7 +966,7 @@ app.get('/directory/:slug', async (req, res) => {
   } catch (e) { console.error(e); }
 
   if (!site) {
-    return res.status(404).send(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الصفحة غير موجودة</title></head><body style="text-align:center;padding:80px;font-family:sans-serif"><h1>404 - الصفحة غير موجودة</h1><a href="/directory">← العودة للدليل</a></body></html>`);
+    return res.status(404).set('Content-Type', 'text/html; charset=utf-8').send(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الصفحة غير موجودة</title></head><body style="text-align:center;padding:80px;font-family:sans-serif"><h1>404 - الصفحة غير موجودة</h1><a href="/directory">← العودة للدليل</a></body></html>`);
   }
 
   const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -1118,6 +1118,7 @@ app.get('/directory/:slug', async (req, res) => {
 </body>
 </html>`;
 
+  res.set('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });
 
