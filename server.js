@@ -903,6 +903,13 @@ app.post('/api/directory/sql', async (req, res) => {
   }
 });
 
+// GET /robots.txt - tell search engines where the sitemap is
+app.get('/robots.txt', (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  res.set('Content-Type', 'text/plain');
+  res.send(`User-agent: *\nAllow: /\nSitemap: ${baseUrl}/sitemap.xml`);
+});
+
 // GET /sitemap.xml - dynamic sitemap
 app.get('/sitemap.xml', async (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
