@@ -70,6 +70,7 @@ async function createTables() {
       password VARCHAR(255) NULL,
       max_users INT DEFAULT 100,
       created_by VARCHAR(100),
+      category VARCHAR(50) DEFAULT 'featured',
       is_active BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -164,6 +165,14 @@ async function createTables() {
     } catch (e) {
       // ignore if table exists
     }
+  }
+
+  // Auto-migration: Add category column to rooms table if it does not exist
+  try {
+    await db.query("ALTER TABLE rooms ADD COLUMN category VARCHAR(50) DEFAULT 'featured'");
+    console.log('✅ تم فحص وتحديث عمود category في جدول rooms');
+  } catch (e) {
+    // Column might already exist, ignore error
   }
 
   // Insert default rooms
@@ -339,7 +348,7 @@ app.get('/api/rooms', async (req, res) => {
   try {
     if (db) {
       const [rows] = await db.query(
-        'SELECT id, name, description, type FROM rooms WHERE is_active = 1 ORDER BY id ASC'
+        'SELECT id, name, description, type, category FROM rooms WHERE is_active = 1 ORDER BY id ASC'
       );
       const roomsWithCount = rows.map(r => ({
         ...r,
@@ -360,7 +369,7 @@ app.get('/api/rooms', async (req, res) => {
 
 // Create new room
 app.post('/api/rooms', async (req, res) => {
-  const { name, description, type, password, username } = req.body;
+  const { name, description, type, password, username, category } = req.body;
   if (!name || !username) {
     return res.status(400).json({ success: false, error: 'اسم الغرفة والمستخدم مطلوبان' });
   }
@@ -372,22 +381,28 @@ app.post('/api/rooms', async (req, res) => {
         return res.status(409).json({ success: false, error: 'اسم الغرفة موجود مسبقاً' });
       }
       const [result] = await db.query(
-        'INSERT INTO rooms (name, description, type, password, created_by) VALUES (?, ?, ?, ?, ?)',
-        [cleanName, description || '', type || 'public', password || null, username]
+        'INSERT INTO rooms (name, description, type, password, created_by, category) VALUES (?, ?, ?, ?, ?, ?)',
+        [cleanName, description || '', type || 'public', password || null, username, category || 'featured']
       );
       // Make creator an admin
       await db.query(
         'INSERT INTO room_admins (room_id, username, assigned_by) VALUES (?, ?, ?)',
         [result.insertId, username, 'system']
       );
-      res.json({ success: true, room: { id: result.insertId, name: cleanName } });
+      // Broadcast changes
+      broadcastAdminStats();
+      io.emit('room_list_updated');
+      res.json({ success: true, room: { id: result.insertId, name: cleanName, category: category || 'featured' } });
     } else {
       if (inMemoryRooms[cleanName]) {
         return res.status(409).json({ success: false, error: 'اسم الغرفة موجود مسبقاً' });
       }
       const id = Object.keys(inMemoryRooms).length + 1;
-      inMemoryRooms[cleanName] = { id, name: cleanName, description, type: type || 'public' };
+      inMemoryRooms[cleanName] = { id, name: cleanName, description, type: type || 'public', category: category || 'featured' };
       inMemoryAdmins[cleanName] = [username];
+      // Broadcast changes
+      broadcastAdminStats();
+      io.emit('room_list_updated');
       res.json({ success: true, room: inMemoryRooms[cleanName] });
     }
   } catch (err) {

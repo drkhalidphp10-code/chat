@@ -293,22 +293,69 @@
 
     <!-- Rooms Page -->
     <div class="page-section" id="page-rooms">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div class="section-title" style="margin:0">🏠 الغرف المتاحة</div>
-      </div>
-      <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>اسم الغرفة</th>
-              <th>النوع</th>
-              <th>المتصلون</th>
-              <th>الوصف</th>
-              <th>العمليات</th>
-            </tr>
-          </thead>
-          <tbody id="roomsTableBody"></tbody>
-        </table>
+      <div style="display:grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; margin-bottom: 24px;">
+        <!-- Left: Rooms List -->
+        <div>
+          <div class="section-title">🏠 الغرف المتاحة</div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>اسم الغرفة</th>
+                  <th>النوع</th>
+                  <th>المتصلون</th>
+                  <th>الدولة/التصنيف</th>
+                  <th>الوصف</th>
+                  <th>العمليات</th>
+                </tr>
+              </thead>
+              <tbody id="roomsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Right: Add Room Form -->
+        <div>
+          <div class="section-title">➕ إضافة غرفة جديدة</div>
+          <div class="glass-card" style="padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-lg);">
+            <div class="flex flex-col gap-3">
+              <div class="form-group">
+                <label class="form-label" for="newRoomName">اسم الغرفة *</label>
+                <input type="text" id="newRoomName" class="form-input" placeholder="مثال: دردشة بغداد">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="newRoomCategory">تصنيف الدولة / القسم</label>
+                <select id="newRoomCategory" class="form-input">
+                  <option value="featured" selected>⭐ الغرف المميزة (الكل)</option>
+                  <option value="iraq">🇮🇶 العراق</option>
+                  <option value="saudi">🇸🇦 السعودية</option>
+                  <option value="egypt">🇪🇬 مصر</option>
+                  <option value="jordan">🇯🇴 الأردن</option>
+                  <option value="syria">🇸🇾 سوريا</option>
+                  <option value="oman">🇴🇲 عمان</option>
+                  <option value="yemen">🇾🇪 اليمن</option>
+                  <option value="lebanon">🇱🇧 لبنان</option>
+                  <option value="morocco">🇲🇦 المغرب</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="newRoomDesc">الوصف</label>
+                <input type="text" id="newRoomDesc" class="form-input" placeholder="وصف قصير للغرفة...">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="newRoomType">النوع</label>
+                <select id="newRoomType" class="form-input" onchange="toggleNewRoomPassword()">
+                  <option value="public" selected>🌐 عامة</option>
+                  <option value="private">🔒 خاصة (بكلمة مرور)</option>
+                </select>
+              </div>
+              <div class="form-group" id="newRoomPasswordGroup" style="display: none;">
+                <label class="form-label" for="newRoomPassword">كلمة المرور للغرفة</label>
+                <input type="password" id="newRoomPassword" class="form-input" placeholder="كلمة المرور...">
+              </div>
+              <button class="btn btn-primary w-full" onclick="addRoom()">إضافة الغرفة</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -704,6 +751,19 @@ function updateDashboard(stats) {
 }
 
 async function loadRoomsTable() {
+  const categoryNames = {
+    featured: '⭐ المميزة',
+    iraq: '🇮🇶 العراق',
+    saudi: '🇸🇦 السعودية',
+    egypt: '🇪🇬 مصر',
+    jordan: '🇯🇴 الأردن',
+    syria: '🇸🇾 سوريا',
+    oman: '🇴🇲 عمان',
+    yemen: '🇾🇪 اليمن',
+    lebanon: '🇱🇧 لبنان',
+    morocco: '🇲🇦 المغرب'
+  };
+
   try {
     const res = await fetch('/api/rooms');
     const data = await res.json();
@@ -711,6 +771,7 @@ async function loadRoomsTable() {
     tbody.innerHTML = '';
     (data.rooms || []).forEach(r => {
       const tr = document.createElement('tr');
+      const catText = categoryNames[r.category] || r.category || '⭐ المميزة';
       tr.innerHTML = `
         <td><strong>${escapeHtml(r.name)}</strong></td>
         <td><span class="badge ${r.type === 'public' ? 'badge-success' : 'badge-primary'}">${r.type === 'public' ? '🌐 عامة' : '🔒 خاصة'}</span></td>
@@ -720,6 +781,7 @@ async function loadRoomsTable() {
             ${r.online || 0}
           </div>
         </td>
+        <td><span class="badge badge-primary">${escapeHtml(catText)}</span></td>
         <td style="color:var(--text-muted);font-size:13px;">${escapeHtml(r.description || '-')}</td>
         <td>
           <button class="btn btn-danger btn-sm" onclick="confirmDeleteRoom(${r.id}, '${escapeHtml(r.name)}')">حذف</button>
@@ -754,6 +816,66 @@ async function deleteRoom(roomId) {
       loadStats();
     } else {
       showToast(data.error || 'فشل حذف الغرفة', 'error');
+    }
+  } catch (e) {
+    showToast('خطأ في الاتصال بالخادم', 'error');
+  }
+}
+
+function toggleNewRoomPassword() {
+  const type = document.getElementById('newRoomType').value;
+  const pwdGroup = document.getElementById('newRoomPasswordGroup');
+  if (type === 'private') {
+    pwdGroup.style.display = 'flex';
+  } else {
+    pwdGroup.style.display = 'none';
+  }
+}
+
+async function addRoom() {
+  const roomName = document.getElementById('newRoomName').value.trim();
+  const roomDesc = document.getElementById('newRoomDesc').value.trim();
+  const roomType = document.getElementById('newRoomType').value;
+  const roomPass = document.getElementById('newRoomPassword').value.trim();
+  const roomCategory = document.getElementById('newRoomCategory').value;
+
+  if (!roomName) {
+    showToast('الرجاء إدخال اسم الغرفة', 'error');
+    return;
+  }
+
+  if (roomType === 'private' && !roomPass) {
+    showToast('الرجاء إدخال كلمة مرور للغرفة الخاصة', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: roomName,
+        description: roomDesc,
+        type: roomType,
+        password: roomType === 'private' ? roomPass : null,
+        username: adminUser || 'admin',
+        category: roomCategory
+      })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      showToast('تم إضافة الغرفة الجديدة بنجاح', 'success');
+      document.getElementById('newRoomName').value = '';
+      document.getElementById('newRoomDesc').value = '';
+      document.getElementById('newRoomPassword').value = '';
+      document.getElementById('newRoomType').value = 'public';
+      document.getElementById('newRoomCategory').value = 'featured';
+      document.getElementById('newRoomPasswordGroup').style.display = 'none';
+      loadRoomsTable();
+      loadStats();
+    } else {
+      showToast(data.error || 'فشل إضافة الغرفة الجديدة', 'error');
     }
   } catch (e) {
     showToast('خطأ في الاتصال بالخادم', 'error');

@@ -547,12 +547,17 @@
       }
     }
 
-    // Distribute rooms to countries dynamically based on room name hash
+    // Distribute rooms to countries dynamically or based on category
     function getRoomsForCategory(catId) {
       if (catId === 'featured') return allRooms; // featured shows all rooms
 
-      // Group rooms by category
       return allRooms.filter(room => {
+        // If room has an explicit category chosen by admin (and it's not the default 'featured')
+        if (room.category && room.category !== 'featured') {
+          return room.category === catId;
+        }
+
+        // Backward compatibility fallback for legacy rooms
         const name = room.name.toLowerCase();
         
         // Match country keywords
