@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- الرئيسية -->
+  <url>
+    <loc>https://zeniraq.com/</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <!-- شات العراق -->
+  <url>
+    <loc>https://zeniraq.com/chat-iraq</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <!-- شات بغداد -->
+  <url>
+    <loc>https://zeniraq.com/chat-baghdad</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <!-- شات البصرة -->
+  <url>
+    <loc>https://zeniraq.com/chat-basra</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <!-- دردشة العراق الصوتية -->
+  <url>
+    <loc>https://zeniraq.com/iraq-voice-chat</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <!-- شات عراقي للجوال -->
+  <url>
+    <loc>https://zeniraq.com/iraqi-chat-mobile</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <!-- شات عراقي بدون تسجيل -->
+  <url>
+    <loc>https://zeniraq.com/iraqi-chat-without-registration</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <!-- غرفة الدردشة الرئيسية -->
+  <url>
+    <loc>https://zeniraq.com/chat</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <!-- دليل المواقع -->
+  <url>
+    <loc>https://zeniraq.com/directory</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <!-- سياسة الخصوصية -->
+  <url>
+    <loc>https://zeniraq.com/privacy</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <!-- شروط الاستخدام -->
+  <url>
+    <loc>https://zeniraq.com/terms</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>
