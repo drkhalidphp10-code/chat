@@ -954,6 +954,46 @@ app.get('/sitemap.xml', async (req, res) => {
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>${baseUrl}/chat-iraq</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/chat-baghdad</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/chat-basra</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/iraq-voice-chat</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/iraqi-chat-mobile</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/iraqi-chat-without-registration</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>${baseUrl}/directory</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
@@ -1146,6 +1186,15 @@ app.get('/directory/:slug', async (req, res) => {
 
 // Serve pages
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/chat-iraq', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-iraq.html')));
+app.get('/chat-baghdad', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-baghdad.html')));
+app.get('/chat-basra', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-basra.html')));
+app.get('/iraq-voice-chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'iraq-voice-chat.html')));
+app.get('/iraqi-chat-mobile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'iraqi-chat-mobile.html')));
+app.get('/iraqi-chat-without-registration', (req, res) => res.sendFile(path.join(__dirname, 'public', 'iraqi-chat-without-registration.html')));
+app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
+app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, 'public', 'terms.html')));
+
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/directory', (req, res) => res.sendFile(path.join(__dirname, 'public', 'directory.html')));
